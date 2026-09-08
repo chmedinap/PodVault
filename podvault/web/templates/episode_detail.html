@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block title %}{{ episode.display_title }} - PodVault{% endblock %}
+{% block topbar_title %}Episode{% endblock %}
+{% block topbar_subtitle %}{{ podcast_name }}{% endblock %}
+{% block content %}
+
+<a href="/podcasts/{{ podcast_name }}" class="muted" style="display:inline-block; margin-bottom:22px;">&larr; {{ podcast_name }}</a>
+
+<div class="row" style="align-items:flex-start; gap:22px; flex-wrap:wrap; margin-bottom:22px;">
+  <div class="cover-placeholder" style="width:148px; height:148px; flex-shrink:0; position:relative; overflow:hidden; background:{{ cover_gradient(podcast_name) }};">
+    {% if episode.status == 'downloaded' %}
+    <img src="/podcasts/{{ podcast_name }}/episodes/{{ episode.episode_id }}/cover" alt="" style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover;" onerror="this.style.display='none';">
+    {% else %}
+    episode art
+    {% endif %}
+  </div>
+  <div style="flex:1; min-width:280px; display:flex; flex-direction:column; gap:12px;">
+    <div class="row" style="gap:9px;">
+      <span class="mono muted" style="font-size:11.5px;">{{ episode.episode_number if episode.episode_number else (episode.published[:10] if episode.published else '') }}</span>
+      {% if episode.status == 'downloaded' %}<span class="chip chip-ok"><span class="chip-dot"></span>downloaded</span>
+      {% elif episode.status == 'missing' %}<span class="chip chip-warn"><span class="chip-dot"></span>missing</span>
+      {% else %}<span class="chip chip-dim"><span class="chip-dot"></span>pending</span>{% endif %}
+      {% if episode.in_feed %}<span class="chip chip-dim"><span class="chip-dot"></span>in feed</span>
+      {% else %}<span class="chip chip-purple"><span class="chip-dot"></span>removed from feed · local only</span>{% endif %}
+      {% if episode.checksum_status == 'corrupt' %}<span class="chip chip-err"><span class="chip-dot"></span>checksum mismatch</span>{% endif %}
+    </div>
+    <div style="font-size:24px; font-weight:700; letter-spacing:-0.02em; line-height:1.25;">{{ episode.display_title }}</div>
+    {% if episode.summary %}<div class="muted" style="font-size:13.5px; line-height:1.6; max-width:620px;">{{ episode.summary }}</div>{% endif %}
+    <div class="row" style="gap:8px;">
+      {% if episode.status == 'downloaded' %}
+      <button type="button" class="play-button"
+              data-podcast="{{ podcast_name }}" data-episode="{{ episode.episode_id }}"
+              data-title="{{ episode.display_title }}">▶ Play</button>
+      <button type="button" class="secondary" id="copy-path-btn" data-path="{{ episode.saved_path or '' }}">Copy path</button>
+      {% endif %}
+      <form method="post" action="/podcasts/{{ podcast_name }}/episodes/{{ episode.episode_id }}/redownload" class="inline">
+        <input type="hidden" name="return_to" value="/podcasts/{{ podcast_name }}/episodes/{{ episode.episode_id }}">
+        <button type="submit" class="secondary">Re-download</button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); gap:16px; margin-bottom:16px;">
+  <div class="card" style="margin-bottom:0;">
+    <div style="font-size:12.5px; font-weight:600; margin-bottom:12px;">Custom name</div>
+    <p class="muted" style="font-size:12px; line-height:1.5; margin-top:0;">
+      Overrides the feed title in the folder, the filename, and the <code>TIT2</code> ID3 tag. Survives the feed being re-synced.
+    </p>
+    <form method="post" action="/podcasts/{{ podcast_name }}/episodes/{{ episode.episode_id }}/rename">
+      <input type="hidden" name="return_to" value="/podcasts/{{ podcast_name }}/episodes/{{ episode.episode_id }}">
+      <input type="text" name="custom_title" value="{{ episode.custom_title or '' }}" placeholder="{{ episode.title }}" style="width:100%; margin-bottom:10px;">
+      <button type="submit" class="secondary btn-sm">Save & rename files</button>
+    </form>
+  </div>
+
+  <div class="card" style="margin-bottom:0;">
+    <div style="font-size:12.5px; font-weight:600; margin-bottom:12px;">Metadata</div>
+    <table>
+      <tbody>
+        <tr><td class="muted">Published</td><td class="mono">{{ episode.published or '—' }}</td></tr>
+        <tr><td class="muted">Duration</td><td class="mono">{{ episode.duration_seconds|duration }}</td></tr>
+        <tr><td class="muted">Size</td><td class="mono">{{ episode.size_bytes|filesize if episode.size_bytes else '—' }}</td></tr>
+        <tr><td class="muted">Episode / season</td><td class="mono">{{ episode.episode_number or '—' }} / {{ episode.season_number or '—' }}</td></tr>
+        <tr><td class="muted">Feed GUID</td><td class="mono ellipsis" title="{{ episode.episode_id }}">{{ episode.episode_id }}</td></tr>
+        <tr><td class="muted">ID3 tags</td><td class="mono">{{ id3_status_label }}</td></tr>
+        <tr>
+          <td class="muted">Integrity</td>
+          <td class="mono" style="color:{{ 'var(--err)' if episode.checksum_status == 'corrupt' else ('var(--ok)' if episode.checksum_status == 'ok' else 'var(--muted)') }};">
+            {% if episode.checksum_status == 'ok' %}verified{% elif episode.checksum_status == 'corrupt' %}CHECKSUM MISMATCH{% else %}not yet checked{% endif %}
+          </td>
+        </tr>
+        {% if episode.checksum %}
+        <tr><td class="muted">SHA-256</td><td class="mono ellipsis" title="{{ episode.checksum }}">{{ episode.checksum[:16] }}…</td></tr>
+        {% endif %}
+        <tr><td class="muted">Status</td><td class="mono">{{ episode.status }}</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card">
+  <div style="font-size:12.5px; font-weight:600; margin-bottom:10px;">Files on disk</div>
+  {% if episode.files %}
+  <div class="mono" style="display:flex; flex-direction:column; gap:6px; font-size:12px;">
+    {% for f in episode.files %}
+    <div class="row between"><span>&#8618; {{ f.name }}</span><span class="muted">{{ f.size_bytes|filesize }}</span></div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="muted" style="margin:0;">This episode hasn't been downloaded yet.</p>
+  {% endif %}
+</div>
+
+<script>
+const copyBtn = document.getElementById('copy-path-btn');
+if (copyBtn) {
+  copyBtn.addEventListener('click', function () {
+    navigator.clipboard.writeText(copyBtn.dataset.path).then(function () {
+      const original = copyBtn.textContent;
+      copyBtn.textContent = 'Copied ✓';
+      setTimeout(function () { copyBtn.textContent = original; }, 1500);
+    });
+  });
+}
+</script>
+{% endblock %}

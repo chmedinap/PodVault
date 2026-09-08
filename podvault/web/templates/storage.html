@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+{% block title %}Storage - PodVault{% endblock %}
+{% block topbar_title %}Storage{% endblock %}
+{% block topbar_subtitle %}{{ downloads_folder }}{% endblock %}
+{% block content %}
+
+<div class="card">
+  <div class="row between" style="margin-bottom:14px; flex-wrap:wrap; gap:10px;">
+    <div class="row" style="gap:12px;">
+      <div style="font-size:15px; font-weight:600;">Volume</div>
+      <div class="mono muted" style="font-size:12px;">{{ downloads_folder }} · {{ disk_usage.total_bytes|filesize if disk_usage.total_bytes else '—' }}</div>
+    </div>
+    <div class="row" style="gap:8px;">
+      <a href="/export" class="secondary btn-sm" style="text-decoration:none;">Export library</a>
+      <form method="post" action="/verify">
+        <input type="hidden" name="return_to" value="/storage">
+        <button type="submit" class="secondary btn-sm">Verify all files</button>
+      </form>
+    </div>
+  </div>
+
+  {% if disk_usage.error %}
+  <p class="muted" style="margin:0;">{{ disk_usage.error }}</p>
+  {% else %}
+  <div style="height:14px; border-radius:99px; overflow:hidden; display:flex; background:var(--input-bg);">
+    {% if disk_usage.total_bytes %}
+    <div style="width:{{ (disk_usage.audio_bytes / disk_usage.total_bytes * 100)|round(2) }}%; background:var(--accent);"></div>
+    <div style="width:{{ (disk_usage.art_metadata_bytes / disk_usage.total_bytes * 100)|round(2) }}%; background:var(--purple);"></div>
+    <div style="width:{{ (disk_usage.orphaned_bytes / disk_usage.total_bytes * 100)|round(2) }}%; background:var(--warn);"></div>
+    {% endif %}
+  </div>
+  <div class="row" style="gap:20px; flex-wrap:wrap; font-size:12.5px; color:var(--muted); margin-top:12px;">
+    <span class="row" style="gap:7px;"><span style="width:8px; height:8px; border-radius:2px; background:var(--accent);"></span>Audio <span class="mono" style="color:var(--text);">{{ disk_usage.audio_bytes|filesize }}</span></span>
+    <span class="row" style="gap:7px;"><span style="width:8px; height:8px; border-radius:2px; background:var(--purple);"></span>Art & metadata <span class="mono" style="color:var(--text);">{{ disk_usage.art_metadata_bytes|filesize }}</span></span>
+    <span class="row" style="gap:7px;"><span style="width:8px; height:8px; border-radius:2px; background:var(--warn);"></span>Orphaned files <span class="mono" style="color:var(--text);">{{ disk_usage.orphaned_bytes|filesize }}</span></span>
+    <span class="row" style="gap:7px;"><span style="width:8px; height:8px; border-radius:2px; background:var(--input-bg); border:1px solid var(--border-strong);"></span>Free <span class="mono" style="color:var(--text);">{{ disk_usage.free_bytes|filesize if disk_usage.total_bytes else '—' }}</span></span>
+  </div>
+  {% endif %}
+</div>
+
+<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:16px;">
+  <div class="card" style="margin-bottom:0;">
+    <div style="font-size:12.5px; font-weight:600; margin-bottom:12px;">Largest podcasts</div>
+    {% if not largest_podcasts %}
+    <p class="muted" style="margin:0;">No podcasts yet.</p>
+    {% else %}
+    <div style="display:flex; flex-direction:column; gap:12px;">
+      {% for p in largest_podcasts %}
+      <div>
+        <div class="row between" style="font-size:12.5px; margin-bottom:5px;">
+          <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ p.display_name }}</span>
+          <span class="mono muted" style="flex-shrink:0; padding-left:10px;">{{ p.total_size_bytes|filesize }}</span>
+        </div>
+        <div style="height:4px; border-radius:99px; background:var(--input-bg); overflow:hidden;">
+          <div style="height:100%; background:var(--accent); width:{{ ((p.total_size_bytes / max_podcast_size * 100) if max_podcast_size else 0)|round|int }}%;"></div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="card" style="margin-bottom:0;">
+    <div style="font-size:12.5px; font-weight:600; margin-bottom:12px;">Health</div>
+    <div style="display:flex; flex-direction:column; gap:9px;">
+
+      <div class="row between" style="padding:9px 11px; border-radius:9px; background:rgba(224,161,58,0.09); border:1px solid rgba(224,161,58,0.28); gap:10px;">
+        <span style="font-size:12.5px; color:var(--warn);">
+          {% if verify_result.error %}{{ verify_result.error }}
+          {% else %}{{ verify_result.total_missing }} episode(s) marked as downloaded with no file{% endif %}
+        </span>
+        <form method="post" action="/verify" class="inline">
+          <input type="hidden" name="return_to" value="/storage">
+          <button type="submit" style="background:transparent; border:none; color:var(--warn); font-weight:600; font-size:12px; padding:0;">Verify</button>
+        </form>
+      </div>
+
+      <div style="padding:9px 11px; border-radius:9px; background:rgba(139,124,240,0.09); border:1px solid rgba(139,124,240,0.26);">
+        <div class="row between" style="gap:10px;">
+          <span style="font-size:12.5px; color:var(--purple);">{{ planned_moves|length }} file(s) sitting outside the current naming template</span>
+        </div>
+        {% if planned_moves %}
+        <details style="margin-top:8px;">
+          <summary style="font-size:12px; color:var(--purple); cursor:pointer; font-weight:600;">Show plan</summary>
+          <div class="mono" style="margin-top:8px; display:flex; flex-direction:column; gap:6px; font-size:11px; max-height:220px; overflow-y:auto;">
+            {% for m in planned_moves %}
+            <div class="muted">{{ m.old_folder }} &rarr; {{ m.new_folder }}</div>
+            {% endfor %}
+          </div>
+        </details>
+        {% endif %}
+      </div>
+
+      <div class="row between" style="padding:9px 11px; border-radius:9px; background:{{ 'rgba(63,178,127,0.09)' if id3_job and id3_job.status == 'success' else 'rgba(154,161,171,0.09)' }}; border:1px solid {{ 'rgba(63,178,127,0.26)' if id3_job and id3_job.status == 'success' else 'var(--border-strong)' }}; gap:10px;">
+        <span style="font-size:12.5px; color:{{ 'var(--ok)' if id3_job and id3_job.status == 'success' else 'var(--muted)' }};">
+          ID3 tags:
+          {% if not id3_job %}never checked
+          {% elif id3_job.status == 'running' %}checking… ({{ id3_job.progress }}/{{ id3_job.total or '?' }})
+          {% elif id3_job.status == 'failed' %}error: {{ id3_job.error }}
+          {% else %}{{ id3_job.message }}{% endif %}
+        </span>
+        <div class="row" style="gap:10px; flex-shrink:0;">
+          <form method="post" action="/storage/id3-check" class="inline">
+            <button type="submit" style="background:transparent; border:none; color:var(--muted); font-weight:600; font-size:12px; padding:0;">{{ 'Recheck' if id3_job else 'Check now' }}</button>
+          </form>
+          {% if id3_job and id3_job.status == 'success' %}
+          <form method="post" action="/storage/id3-retag" class="inline">
+            <button type="submit" style="background:transparent; border:none; color:var(--ok); font-weight:600; font-size:12px; padding:0;">Retag</button>
+          </form>
+          {% endif %}
+        </div>
+      </div>
+
+      <div style="padding:9px 11px; border-radius:9px; background:{{ 'rgba(224,82,74,0.09)' if corrupt_rows else ('rgba(63,178,127,0.09)' if integrity_job and integrity_job.status == 'success' else 'rgba(154,161,171,0.09)') }}; border:1px solid {{ 'rgba(224,82,74,0.28)' if corrupt_rows else ('rgba(63,178,127,0.26)' if integrity_job and integrity_job.status == 'success' else 'var(--border-strong)') }};">
+        <div class="row between" style="gap:10px;">
+          <span style="font-size:12.5px; color:{{ 'var(--err)' if corrupt_rows else ('var(--ok)' if integrity_job and integrity_job.status == 'success' else 'var(--muted)') }};">
+            Integrity (checksums):
+            {% if not integrity_job %}never checked
+            {% elif integrity_job.status == 'running' %}checking… ({{ integrity_job.progress }}/{{ integrity_job.total or '?' }})
+            {% elif integrity_job.status == 'failed' %}error: {{ integrity_job.error }}
+            {% else %}{{ integrity_job.message }}{% endif %}
+          </span>
+          <form method="post" action="/storage/integrity-check" class="inline">
+            <button type="submit" style="background:transparent; border:none; color:var(--muted); font-weight:600; font-size:12px; padding:0;">{{ 'Recheck' if integrity_job else 'Check now' }}</button>
+          </form>
+        </div>
+        {% if corrupt_rows %}
+        <div class="mono" style="margin-top:8px; display:flex; flex-direction:column; gap:5px; font-size:11px;">
+          {% for c in corrupt_rows %}
+          <div class="muted">{{ c.podcast_name }}/{{ c.episode_id }} — last good {{ c.last_good_label }}</div>
+          {% endfor %}
+        </div>
+        <form method="post" action="/storage/redownload-corrupt" style="margin-top:8px;">
+          <button type="submit" class="danger btn-sm">Re-download all {{ corrupt_rows|length }}</button>
+        </form>
+        {% endif %}
+      </div>
+
+      <div style="padding:9px 11px; border-radius:9px; background:rgba(139,124,240,0.09); border:1px solid rgba(139,124,240,0.26);">
+        <div class="row between" style="gap:10px;">
+          <span style="font-size:12.5px; color:var(--purple);">{{ local_only_episodes|length }} episode(s) kept after leaving their feed</span>
+        </div>
+        {% if local_only_episodes %}
+        <details style="margin-top:8px;">
+          <summary style="font-size:12px; color:var(--purple); cursor:pointer; font-weight:600;">Review</summary>
+          <div class="mono" style="margin-top:8px; display:flex; flex-direction:column; gap:6px; font-size:11px; max-height:220px; overflow-y:auto;">
+            {% for e in local_only_episodes %}
+            <div class="muted"><a href="/podcasts/{{ e.podcast_name }}/episodes/{{ e.episode_id }}" style="color:inherit;">{{ e.podcast_name }} — {{ e.title }}</a></div>
+            {% endfor %}
+          </div>
+        </details>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="muted" style="border-top:1px solid var(--border); padding-top:11px; margin-top:11px; font-size:12px; line-height:1.55;">
+      Moving existing files still runs from the CLI: <code>podvault migrate-layout --apply</code>. This screen only shows the plan (dry-run).
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Activity - PodVault{% endblock %}
+{% block topbar_title %}Activity{% endblock %}
+{% block topbar_subtitle %}job history{% endblock %}
+{% block content %}
+
+<div class="row between" style="margin-bottom:16px; flex-wrap:wrap; gap:8px;">
+  <div class="row" style="gap:8px;">
+    {% for f in filters %}
+    <a href="/activity?filter={{ f }}" class="pill {{ 'pill-active' if f == active_filter else '' }}">{{ f }}</a>
+    {% endfor %}
+  </div>
+  <span class="muted mono" style="font-size:11.5px;">jobs table · sqlite</span>
+</div>
+
+{% if not rows %}
+<div class="card"><p class="muted" style="margin:0;">No activity yet.</p></div>
+{% else %}
+<div>
+  {% for row in rows %}
+  {% set j = row.job %}
+  <div style="display:grid; grid-template-columns:22px minmax(96px,130px) minmax(150px,1fr) minmax(88px,140px) minmax(56px,80px) minmax(64px,86px); gap:12px; align-items:center; padding:12px 8px; border-bottom:1px solid var(--border);">
+    <div style="font-size:13px;">
+      {% if j.status == 'success' %}<span style="color:var(--ok);">✓</span>
+      {% elif j.status == 'failed' %}<span style="color:var(--err);">✕</span>
+      {% elif j.status == 'running' %}<span style="color:var(--accent);">●</span>
+      {% else %}<span class="muted">○</span>{% endif %}
+    </div>
+    <div class="mono" style="font-size:11.5px; background:var(--code-bg); border:1px solid var(--border-strong); border-radius:5px; padding:3px 7px; text-align:center;">{{ j.job_type }}</div>
+    <div style="min-width:0; font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--muted);">
+      {% if j.status == 'running' %}in progress ({{ j.progress }}/{{ j.total or '?' }})
+      {% elif j.status == 'failed' %}{{ j.error or 'unknown error' }}
+      {% else %}{{ j.message or '—' }}{% endif %}
+    </div>
+    <div class="mono" style="font-size:11.5px; color:var(--dim); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ j.podcast_name or '—' }}</div>
+    <div class="mono" style="font-size:11.5px; color:var(--dim);">{{ row.duration_label }}</div>
+    <div class="mono" style="font-size:11.5px; color:var(--faint); text-align:right;">{{ row.when_label }}</div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+{% endblock %}

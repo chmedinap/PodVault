@@ -1,0 +1,53 @@
+"""Shared Jinja2Templates instance, split out to avoid a routes<->app import cycle."""
+
+from pathlib import Path
+
+from fastapi.templating import Jinja2Templates
+
+from podvault import __version__
+
+TEMPLATES_DIR = Path(__file__).parent / "templates"
+templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
+
+
+def cover_gradient(name: str) -> str:
+    """
+    A stable diagonal-stripe gradient derived from `name`'s hash, used as a
+    cover-art placeholder for podcasts/episodes with no artwork — same
+    podcast always gets the same color instead of a plain gray box.
+    """
+    hue = sum(ord(c) for c in (name or '')) % 360
+    return (
+        f"repeating-linear-gradient(135deg, "
+        f"oklch(0.44 0.065 {hue}) 0 11px, oklch(0.31 0.055 {hue}) 11px 22px)"
+    )
+
+
+def format_size(num_bytes) -> str:
+    """Human-readable byte count, e.g. 48,283,000 -> '46.1 MB'."""
+    if not num_bytes:
+        return '0 B'
+    size = float(num_bytes)
+    for unit in ('B', 'KB', 'MB', 'GB'):
+        if size < 1024 or unit == 'GB':
+            return f"{int(size)} {unit}" if unit == 'B' else f"{size:.1f} {unit}"
+        size /= 1024
+    return f"{size:.1f} TB"
+
+
+def format_duration(seconds) -> str:
+    """Seconds -> 'h:mm:ss' or 'm:ss', matching how podcast apps usually show episode length."""
+    if seconds is None:
+        return '—'
+    total = int(seconds)
+    hours, remainder = divmod(total, 3600)
+    minutes, secs = divmod(remainder, 60)
+    if hours:
+        return f"{hours}:{minutes:02d}:{secs:02d}"
+    return f"{minutes}:{secs:02d}"
+
+
+templates.env.globals['app_version'] = __version__
+templates.env.globals['cover_gradient'] = cover_gradient
+templates.env.filters['filesize'] = format_size
+templates.env.filters['duration'] = format_duration

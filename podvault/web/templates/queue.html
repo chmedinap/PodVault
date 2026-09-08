@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block title %}Queue - PodVault{% endblock %}
+{% block topbar_title %}Download queue{% endblock %}
+{% block topbar_subtitle %}{{ active_downloads|length }} running · estimated speed & ETA{% endblock %}
+{% block content %}
+
+{% if not active_downloads %}
+<div class="card"><p class="muted" style="margin:0;">No downloads in progress.{% if pending_job_count %} {{ pending_job_count }} job(s) waiting their turn.{% endif %}</p></div>
+{% else %}
+<div class="row" style="justify-content:flex-end; margin-bottom:14px;">
+  <form method="post" action="/queue/cancel-all" class="inline">
+    <button type="submit" class="danger btn-sm" aria-label="Cancel all downloads">Cancel all</button>
+  </form>
+</div>
+{% endif %}
+
+{% for d in active_downloads %}
+<div class="card">
+  <div class="row between" style="margin-bottom:14px;">
+    <span style="display:inline-flex; align-items:center; gap:7px; font-size:11.5px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase; color:var(--accent);">
+      <span style="width:7px; height:7px; border-radius:99px; background:var(--accent);"></span>{{ 'Paused' if d.is_paused else 'Downloading now' }}
+    </span>
+    <div class="row" style="gap:6px;">
+      <form method="post" action="/jobs/{{ d.job.id }}/{{ 'resume' if d.is_paused else 'pause' }}" class="inline">
+        <input type="hidden" name="return_to" value="/queue">
+        <button type="submit" class="secondary btn-sm" aria-label="{{ 'Resume this download' if d.is_paused else 'Pause after the current episode' }}">
+          {{ 'Resume' if d.is_paused else 'Pause' }}
+        </button>
+      </form>
+      <form method="post" action="/jobs/{{ d.job.id }}/cancel" class="inline">
+        <input type="hidden" name="return_to" value="/queue">
+        <button type="submit" class="danger btn-sm" aria-label="Stop this download">Stop this one</button>
+      </form>
+    </div>
+  </div>
+  <div class="row" style="gap:14px; align-items:center;">
+    <div class="cover-placeholder" style="width:64px; height:64px; flex-shrink:0; border-radius:10px; background:{{ cover_gradient(d.job.podcast_name or '') }};"></div>
+    <div style="flex:1; min-width:240px; display:flex; flex-direction:column; gap:7px;">
+      <div style="font-size:14px; font-weight:600;">{{ d.current_episode.custom_title or d.current_episode.title if d.current_episode else (d.job.message or 'preparing…') }}</div>
+      <div class="mono" style="font-size:11.5px; color:var(--dim);">{{ d.job.podcast_name }} · episode {{ d.estimate.completed_count + 1 }} of {{ d.job.total }}</div>
+      <div class="progress"><div class="progress-bar" style="width:{{ d.pct }}%;"></div></div>
+      <div class="mono row" style="gap:16px; font-size:11.5px; color:var(--muted); flex-wrap:wrap;">
+        <span>{{ d.pct }}%</span><span>{{ d.speed_label }}</span><span>eta {{ d.eta_label }}</span>
+      </div>
+    </div>
+    <div class="mono muted" style="font-size:12px; flex-shrink:0;">job {{ d.job.id[:8] }}</div>
+  </div>
+
+  {% if d.up_next %}
+  <div style="margin-top:18px;">
+    <div class="row" style="gap:10px; align-items:baseline; margin-bottom:8px;">
+      <div style="font-size:13px; font-weight:600;">Up next</div>
+      <div class="mono muted" style="font-size:11.5px;">{{ d.up_next|length }} episode(s) · ~{{ d.up_next_total_size }}</div>
+    </div>
+    <div style="border:1px solid var(--border); border-radius:10px; overflow:hidden;">
+      {% for row in d.up_next %}
+      <div style="display:grid; grid-template-columns:26px minmax(0,1fr) 90px 80px 26px; gap:10px; align-items:center; padding:9px 12px; border-bottom:1px solid var(--border);">
+        <div class="mono" style="font-size:11px; color:var(--faint);">{{ '%02d'|format(loop.index) }}</div>
+        <div style="font-size:12.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ row.episode.custom_title or row.episode.title }}</div>
+        <div class="mono" style="font-size:11.5px; color:var(--muted);">~{{ row.estimated_size }}</div>
+        <div class="mono" style="font-size:11.5px; color:var(--dim);">~{{ row.estimated_wait }}</div>
+        <form method="post" action="/jobs/{{ d.job.id }}/skip/{{ row.episode.episode_id }}" class="inline">
+          <input type="hidden" name="return_to" value="/queue">
+          <button type="submit" class="secondary" style="padding:2px 6px; font-size:11px;"
+                  aria-label="Remove {{ row.episode.custom_title or row.episode.title }} from the queue" title="Remove from queue">✕</button>
+        </form>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endfor %}
+
+<div style="margin-top:8px;">
+  <div style="font-size:14px; font-weight:600; margin-bottom:10px;">Finished today</div>
+  {% if not finished_rows %}
+  <div class="card"><p class="muted" style="margin:0;">Nothing finished yet today.</p></div>
+  {% else %}
+  <div>
+    {% for row in finished_rows %}
+    {% set j = row.job %}
+    <div style="display:grid; grid-template-columns:20px minmax(0,1fr) 130px 90px; gap:12px; align-items:center; padding:9px 4px; border-bottom:1px solid var(--border); font-size:12.5px;">
+      <div>{% if j.status == 'success' %}<span style="color:var(--ok);">✓</span>{% else %}<span style="color:var(--err);">✕</span>{% endif %}</div>
+      <div class="muted" style="min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ j.message or j.error or j.job_type }}</div>
+      <div class="mono" style="font-size:11.5px; color:var(--dim);">{{ j.podcast_name or '—' }}</div>
+      <div class="mono" style="font-size:11.5px; color:var(--faint); text-align:right;">{{ row.when_label }}</div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

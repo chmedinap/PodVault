@@ -1,0 +1,1177 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="crossorigin">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  body { margin:0; background:#0b0d10; }
+  a { color:#5b8def; text-decoration:none; }
+  a:hover { color:#84a8f6; }
+  ::-webkit-scrollbar { width:10px; height:10px; }
+  ::-webkit-scrollbar-thumb { background:#262b35; border-radius:99px; }
+  ::-webkit-scrollbar-track { background:transparent; }
+  input, select, button { font-family:inherit; }
+  @keyframes pf-pulse { 0%,100% { opacity:1; } 50% { opacity:0.35; } }
+</style>
+</helmet>
+
+<div style="min-height:100vh; background:#0b0d10; color:#e9ebee; font-family:'IBM Plex Sans', Helvetica, Arial, sans-serif; display:flex; align-items:stretch;">
+
+  <!-- ===================== SIDEBAR ===================== -->
+  <div style="width:236px; flex-shrink:0; border-right:1px solid #1f242c; background:#0e1116; display:flex; flex-direction:column; min-height:100vh; position:sticky; top:0; align-self:flex-start; height:100vh;">
+    <div style="padding:20px 18px 16px 18px; display:flex; align-items:center; gap:10px;">
+      <div style="width:28px; height:28px; border-radius:8px; background:#5b8def; display:flex; align-items:center; justify-content:center; color:#0b0d10; font-weight:700; font-size:14px; font-family:'IBM Plex Mono', monospace;">P</div>
+      <div style="display:flex; flex-direction:column;">
+        <div style="font-size:14px; font-weight:600; letter-spacing:-0.01em;">PodVault</div>
+        <div style="font-size:11px; color:#6b727d; font-family:'IBM Plex Mono', monospace;">v1.0.0</div>
+      </div>
+    </div>
+
+    <div style="padding:6px 10px; display:flex; flex-direction:column; gap:2px;">
+      <sc-for list="{{ nav }}" as="item" hint-placeholder-count="6">
+        <div onClick="{{ item.go }}" style="display:flex; align-items:center; gap:10px; padding:8px 10px; border-radius:8px; cursor:pointer; font-size:13.5px; font-weight:500; background:{{ item.bg }}; color:{{ item.fg }};" style-hover="background:#171b22;">
+          <span style="width:16px; text-align:center; font-size:13px; opacity:0.9;">{{ item.glyph }}</span>
+          <span style="flex:1; min-width:0;">{{ item.label }}</span>
+          <sc-if value="{{ item.count }}" hint-placeholder-val="{{ true }}">
+            <span style="font-family:'IBM Plex Mono', monospace; font-size:11px; color:{{ item.countColor }}; background:{{ item.countBg }}; padding:1px 6px; border-radius:99px;">{{ item.count }}</span>
+          </sc-if>
+        </div>
+      </sc-for>
+    </div>
+
+    <div style="padding:14px 10px 6px 10px;">
+      <div style="font-size:10.5px; letter-spacing:0.09em; text-transform:uppercase; color:#565d68; padding:0 10px 6px 10px; font-weight:600;">Previews</div>
+      <div onClick="{{ goMobile }}" style="display:flex; align-items:center; gap:10px; padding:8px 10px; border-radius:8px; cursor:pointer; font-size:13.5px; font-weight:500; background:{{ mobileBg }}; color:{{ mobileFg }};" style-hover="background:#171b22;">
+        <span style="width:16px; text-align:center; font-size:13px;">▭</span>
+        <span>Mobile</span>
+      </div>
+    </div>
+
+    <div style="flex:1;"></div>
+
+    <!-- NOT IMPLEMENTED (Fase 10 decision): this widget and the nav badge counts were dropped
+         deliberately — both cost an extra DB query on every page load, for every page. Kept here
+         only as a design reference; do not re-translate without a cached/TTL counts query. -->
+    <div style="margin:10px; padding:12px; border:1px dashed #262b35; border-radius:10px; background:#12151b; opacity:0.55;">
+      <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:8px;">
+        <span style="font-size:11.5px; color:#9aa1ab; font-weight:500;">Library size</span>
+        <span style="font-family:'IBM Plex Mono', monospace; font-size:11.5px; color:#e9ebee;">168.4 GB</span>
+      </div>
+      <div style="height:5px; border-radius:99px; background:#1b1f26; overflow:hidden; display:flex;">
+        <div style="width:34%; background:#5b8def;"></div>
+        <div style="width:9%; background:#e0a13a;"></div>
+      </div>
+      <div style="margin-top:8px; font-size:11px; color:#6b727d; font-family:'IBM Plex Mono', monospace;">not implemented · needs cached counts</div>
+    </div>
+
+    <div style="padding:6px 20px 16px 20px; font-size:11px; color:#565d68; font-family:'IBM Plex Mono', monospace;">v1.0.0</div>
+  </div>
+
+  <!-- ===================== MAIN ===================== -->
+  <div style="flex:1; min-width:0; display:flex; flex-direction:column; min-height:100vh;">
+
+    <!-- topbar -->
+    <div style="height:60px; flex-shrink:0; border-bottom:1px solid #1f242c; background:rgba(11,13,16,0.92); backdrop-filter:blur(8px); display:flex; align-items:center; gap:14px; padding:0 24px; position:sticky; top:0; z-index:5;">
+      <div style="display:flex; align-items:center; gap:8px; min-width:0;">
+        <span style="font-size:15px; font-weight:600; letter-spacing:-0.01em; white-space:nowrap;">{{ screenTitle }}</span>
+        <span style="font-size:12.5px; color:#6b727d; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ screenSubtitle }}</span>
+      </div>
+      <div style="flex:1;"></div>
+      <div style="display:flex; align-items:center; gap:8px; background:#14171c; border:1px solid #262b35; border-radius:8px; padding:7px 10px; width:280px; max-width:34vw;">
+        <span style="color:#6b727d; font-size:12px;">⌕</span>
+        <input value="{{ query }}" onInput="{{ onQuery }}" placeholder="Search podcasts and episodes" style="flex:1; min-width:0; background:transparent; border:none; outline:none; color:#e9ebee; font-size:13px;">
+        <span style="font-family:'IBM Plex Mono', monospace; font-size:10.5px; color:#565d68; border:1px solid #262b35; border-radius:4px; padding:1px 5px;">/</span>
+      </div>
+      <button onClick="{{ goQueue }}" style="display:flex; align-items:center; gap:7px; background:#5b8def; color:#0a0c10; padding:8px 13px; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer; white-space:nowrap; border:none; font-family:inherit;" style-hover="background:#7aa4f5;">
+        <span style="font-size:13px;">+</span> Add podcast
+      </button>
+    </div>
+
+    <!-- FASE 22 · job strip: replaces the /jobs/{id} interstitial. Actions stay on the page they
+         were fired from; this strip is the one place a running job reports, and it links to Queue. -->
+    <sc-if value="{{ jobStripVisible }}" hint-placeholder-val="{{ true }}">
+      <div style="flex-shrink:0; border-bottom:1px solid #1f242c; background:#101318; padding:9px 24px; display:flex; align-items:center; gap:14px; position:sticky; top:60px; z-index:4;">
+        <span style="width:7px; height:7px; border-radius:99px; flex-shrink:0; background:{{ jobStrip.dot }}; animation:{{ jobStrip.pulse }};"></span>
+        <div style="min-width:0; display:flex; align-items:baseline; gap:9px; flex-wrap:wrap;">
+          <span style="font-size:12.5px; font-weight:600; white-space:nowrap;">{{ jobStrip.label }}</span>
+          <span style="font-family:'IBM Plex Mono', monospace; font-size:11.5px; color:#9aa1ab; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ jobStrip.detail }}</span>
+        </div>
+        <div style="flex:1; min-width:60px; max-width:280px; height:4px; border-radius:99px; background:#252a33; overflow:hidden;">
+          <div style="height:100%; background:{{ jobStrip.dot }}; width:{{ jobStrip.pct }};"></div>
+        </div>
+        <span style="font-family:'IBM Plex Mono', monospace; font-size:11.5px; color:#6b727d; flex-shrink:0;">{{ jobStrip.pct }}</span>
+        <button onClick="{{ goQueue }}" style="background:transparent; border:1px solid #262b35; color:#e9ebee; padding:4px 11px; border-radius:6px; font-size:12px; cursor:pointer; flex-shrink:0; font-family:inherit;" style-hover="background:#171b22;">View queue</button>
+        <button onClick="{{ cancelJob }}" style="background:transparent; border:1px solid rgba(224,82,74,0.4); color:#e0524a; padding:4px 11px; border-radius:6px; font-size:12px; cursor:pointer; flex-shrink:0; font-family:inherit;" style-hover="background:rgba(224,82,74,0.1);">Cancel</button>
+        <button onClick="{{ dismissJob }}" aria-label="Dismiss" style="background:transparent; border:none; color:#565d68; font-size:13px; cursor:pointer; flex-shrink:0; padding:4px;" style-hover="color:#e9ebee;">✕</button>
+      </div>
+    </sc-if>
+
+    <!-- FASE 22 · toast: flashes float instead of pushing the page down, and carry an undo/next step -->
+    <sc-if value="{{ toastVisible }}" hint-placeholder-val="{{ true }}">
+      <div style="position:fixed; top:74px; right:24px; z-index:30; max-width:400px; display:flex; align-items:flex-start; gap:11px; padding:12px 14px; border-radius:10px; background:#161a21; border:1px solid {{ toast.border }}; box-shadow:0 10px 30px rgba(0,0,0,0.45);">
+        <span style="color:{{ toast.color }}; font-size:13px; line-height:1.4; flex-shrink:0;">{{ toast.icon }}</span>
+        <div style="min-width:0; display:flex; flex-direction:column; gap:5px;">
+          <span style="font-size:12.5px; color:#e9ebee; line-height:1.45;">{{ toast.message }}</span>
+          <sc-if value="{{ toast.action }}" hint-placeholder-val="{{ true }}">
+            <span onClick="{{ toast.onAction }}" style="font-size:12px; font-weight:600; color:{{ toast.color }}; cursor:pointer; width:fit-content;">{{ toast.action }}</span>
+          </sc-if>
+        </div>
+        <button onClick="{{ dismissToast }}" aria-label="Dismiss" style="background:transparent; border:none; color:#565d68; font-size:12px; cursor:pointer; padding:0 0 0 4px; flex-shrink:0;" style-hover="color:#e9ebee;">✕</button>
+      </div>
+    </sc-if>
+
+    <div style="flex:1; min-width:0; padding:24px 24px 132px 24px;">
+
+      <!-- ============ LIBRARY ============ -->
+      <sc-if value="{{ isLibrary }}" hint-placeholder-val="{{ true }}">
+        <div data-screen-label="Library" style="display:flex; flex-direction:column; gap:22px; max-width:1320px;">
+
+          <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:12px;">
+            <div style="background:#14171c; border:1px solid #1f242c; border-radius:12px; padding:16px;">
+              <div style="font-size:11.5px; letter-spacing:0.06em; text-transform:uppercase; color:#6b727d; font-weight:600;">Podcasts</div>
+              <div style="font-family:'IBM Plex Mono', monospace; font-size:26px; margin-top:6px; letter-spacing:-0.02em;">8</div>
+              <div style="font-size:12px; color:#6b727d; margin-top:2px;">2 syncing tonight</div>
+            </div>
+            <div style="background:#14171c; border:1px solid #1f242c; border-radius:12px; padding:16px;">
+              <div style="font-size:11.5px; letter-spacing:0.06em; text-transform:uppercase; color:#6b727d; font-weight:600;">Downloaded</div>
+              <div style="font-family:'IBM Plex Mono', monospace; font-size:26px; margin-top:6px; letter-spacing:-0.02em; color:#3fb27f;">612</div>
+              <div style="font-size:12px; color:#6b727d; margin-top:2px;">of 1,043 episodes</div>
+            </div>
+            <div style="background:#14171c; border:1px solid #1f242c; border-radius:12px; padding:16px;">
+              <div style="font-size:11.5px; letter-spacing:0.06em; text-transform:uppercase; color:#6b727d; font-weight:600;">Missing on disk</div>
+              <div style="font-family:'IBM Plex Mono', monospace; font-size:26px; margin-top:6px; letter-spacing:-0.02em; color:#e0a13a;">14</div>
+              <div style="font-size:12px; color:#6b727d; margin-top:2px;">last verified 3h ago</div>
+            </div>
+            <div style="background:#14171c; border:1px solid #1f242c; border-radius:12px; padding:16px;">
+              <div style="font-size:11.5px; letter-spacing:0.06em; text-transform:uppercase; color:#6b727d; font-weight:600;">In queue</div>
+              <div style="font-family:'IBM Plex Mono', monospace; font-size:26px; margin-top:6px; letter-spacing:-0.02em; color:#5b8def;">18</div>
+              <div style="font-size:12px; color:#6b727d; margin-top:2px;">1 downloading now</div>
+            </div>
+            <!-- FASE 22 · archive health: the point of checksums + retention, surfaced at the top level -->
+            <div onClick="{{ goStorage }}" style="background:#14171c; border:1px solid rgba(224,82,74,0.28); border-radius:12px; padding:16px; cursor:pointer;" style-hover="border-color:rgba(224,82,74,0.5);">
+              <div style="font-size:11.5px; letter-spacing:0.06em; text-transform:uppercase; color:#6b727d; font-weight:600;">Archive health</div>
+              <div style="font-family:'IBM Plex Mono', monospace; font-size:26px; margin-top:6px; letter-spacing:-0.02em; color:#e0524a;">3</div>
+              <div style="font-size:12px; color:#6b727d; margin-top:2px;">corrupt · 41 local-only kept</div>
+            </div>
+          </div>
+
+          <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+            <div style="font-size:15px; font-weight:600;">All podcasts</div>
+            <div style="flex:1;"></div>
+            <sc-for list="{{ libFilters }}" as="f" hint-placeholder-count="4">
+              <div onClick="{{ f.go }}" style="padding:6px 12px; border-radius:99px; font-size:12.5px; font-weight:500; cursor:pointer; border:1px solid {{ f.border }}; background:{{ f.bg }}; color:{{ f.fg }};">{{ f.label }}</div>
+            </sc-for>
+            <div style="width:1px; height:22px; background:#262b35;"></div>
+            <div style="display:flex; align-items:center; gap:6px; background:#14171c; border:1px solid #262b35; border-radius:8px; padding:6px 11px; font-size:12.5px; color:#9aa1ab; cursor:pointer;">Sort: recent activity ▾</div>
+          </div>
+
+          <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(224px, 1fr)); gap:18px;">
+            <sc-for list="{{ visiblePodcasts }}" as="p" hint-placeholder-count="8">
+              <div onClick="{{ p.open }}" style="cursor:pointer; display:flex; flex-direction:column; gap:10px; border-radius:14px;" style-hover="transform:translateY(-2px);">
+                <div style="position:relative; aspect-ratio:1/1; border-radius:12px; overflow:hidden; border:1px solid #262b35; background:{{ p.cover }}; display:flex; align-items:flex-end; padding:10px;">
+                  <div style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-family:'IBM Plex Mono', monospace; font-size:10.5px; letter-spacing:0.08em; color:rgba(255,255,255,0.5); text-transform:uppercase;">cover art</div>
+                  <div style="position:relative; display:flex; align-items:center; gap:6px; background:rgba(8,10,13,0.82); border:1px solid rgba(255,255,255,0.1); border-radius:99px; padding:4px 9px; font-family:'IBM Plex Mono', monospace; font-size:11px; color:#e9ebee;">
+                    <span style="width:6px; height:6px; border-radius:99px; background:{{ p.dotColor }};"></span>
+                    {{ p.ratio }}
+                  </div>
+                </div>
+                <div style="display:flex; flex-direction:column; gap:3px;">
+                  <div style="font-size:13.5px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ p.display }}</div>
+                  <div style="display:flex; align-items:center; gap:6px; min-width:0;">
+                    <span style="font-family:'IBM Plex Mono', monospace; font-size:11px; color:#6b727d; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ p.name }}</span>
+                    <sc-if value="{{ p.corrupt }}" hint-placeholder-val="{{ true }}">
+                      <span style="flex-shrink:0; font-size:10.5px; font-weight:600; padding:1px 6px; border-radius:99px; background:rgba(224,82,74,0.14); color:#e0524a;">{{ p.corrupt }} corrupt</span>
+                    </sc-if>
+                    <sc-if value="{{ p.localOnly }}" hint-placeholder-val="{{ true }}">
+                      <span style="flex-shrink:0; font-size:10.5px; font-weight:600; padding:1px 6px; border-radius:99px; background:rgba(139,124,240,0.14); color:#a99df5;">{{ p.localOnly }} local</span>
+                    </sc-if>
+                  </div>
+                  <div style="height:3px; border-radius:99px; background:#1b1f26; overflow:hidden; margin-top:5px;">
+                    <div style="height:100%; background:{{ p.dotColor }}; width:{{ p.pct }};"></div>
+                  </div>
+                  <div style="display:flex; justify-content:space-between; font-size:11.5px; color:#6b727d; margin-top:3px;">
+                    <span>{{ p.statusLine }}</span>
+                    <span style="font-family:'IBM Plex Mono', monospace;">{{ p.size }}</span>
+                  </div>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ============ PODCAST DETAIL ============ -->
+      <sc-if value="{{ isPodcast }}" hint-placeholder-val="{{ true }}">
+        <div data-screen-label="Podcast detail" style="display:flex; flex-direction:column; gap:22px; max-width:1320px;">
+
+          <div style="display:flex; gap:22px; align-items:flex-start; flex-wrap:wrap;">
+            <div style="width:180px; height:180px; flex-shrink:0; border-radius:14px; border:1px solid #262b35; overflow:hidden; background:{{ current.cover }}; display:flex; align-items:center; justify-content:center; font-family:'IBM Plex Mono', monospace; font-size:10.5px; letter-spacing:0.08em; color:rgba(255,255,255,0.5); text-transform:uppercase;">cover art</div>
+            <div style="flex:1; min-width:280px; display:flex; flex-direction:column; gap:12px;">
+              <div style="display:flex; flex-direction:column; gap:6px;">
+                <div style="font-family:'IBM Plex Mono', monospace; font-size:11.5px; color:#6b727d;">{{ current.name }}</div>
+                <div style="font-size:28px; font-weight:700; letter-spacing:-0.02em;">{{ current.display }}</div>
+                <div style="font-size:13px; color:#9aa1ab;">{{ current.author }}</div>
+              </div>
+              <div style="display:flex; gap:18px; flex-wrap:wrap; font-size:12.5px; color:#9aa1ab;">
+                <span><span style="font-family:'IBM Plex Mono', monospace; color:#e9ebee;">{{ current.total }}</span> episodes</span>
+                <span><span style="font-family:'IBM Plex Mono', monospace; color:#3fb27f;">{{ current.downloaded }}</span> downloaded</span>
+                <span><span style="font-family:'IBM Plex Mono', monospace; color:#e0a13a;">{{ current.missing }}</span> missing</span>
+                <span><span style="font-family:'IBM Plex Mono', monospace; color:#e9ebee;">{{ current.size }}</span> on disk</span>
+                <span>checked {{ current.lastChecked }}</span>
+              </div>
+              <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+                <button onClick="{{ askDownloadAll }}" style="display:flex; align-items:center; gap:7px; background:#5b8def; color:#0a0c10; padding:9px 15px; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer; border:none; font-family:inherit;" style-hover="background:#7aa4f5;">↓ Download all pending</button>
+                <button onClick="{{ startLatest }}" style="background:transparent; border:1px solid #262b35; color:#e9ebee; padding:9px 14px; border-radius:8px; font-size:13px; font-weight:500; cursor:pointer; font-family:inherit;" style-hover="background:#171b22;">Download latest</button>
+                <button onClick="{{ startVerify }}" style="background:transparent; border:1px solid #262b35; color:#e9ebee; padding:9px 14px; border-radius:8px; font-size:13px; font-weight:500; cursor:pointer; font-family:inherit;" style-hover="background:#171b22;">Verify files</button>
+                <button style="background:transparent; border:1px solid #262b35; color:#9aa1ab; padding:9px 12px; border-radius:8px; font-size:13px; cursor:pointer; font-family:inherit;" style-hover="background:#171b22;">⋯</button>
+              </div>
+
+              <!-- FASE 22 · scope confirm: a long, uncancellable-by-default job states its cost first -->
+              <sc-if value="{{ confirmOpen }}" hint-placeholder-val="{{ true }}">
+                <div style="border:1px solid rgba(91,141,239,0.45); background:rgba(91,141,239,0.07); border-radius:10px; padding:14px; display:flex; flex-direction:column; gap:11px;">
+                  <div style="font-size:13px; font-weight:600;">Download {{ confirm.count }} pending episode(s)?</div>
+                  <div style="font-size:12.5px; color:#9aa1ab; line-height:1.55; max-width:560px;">About <span style="font-family:'IBM Plex Mono', monospace; color:#e9ebee;">{{ confirm.size }}</span> at the current average episode size, roughly <span style="font-family:'IBM Plex Mono', monospace; color:#e9ebee;">{{ confirm.time }}</span> at recent speeds. Files land under <span style="font-family:'IBM Plex Mono', monospace; color:#c9ced6;">{{ confirm.folder }}</span>.</div>
+                  <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                    <button onClick="{{ startDownloadAll }}" style="background:#5b8def; color:#0a0c10; padding:7px 14px; border-radius:7px; font-size:12.5px; font-weight:600; cursor:pointer; border:none; font-family:inherit;" style-hover="background:#7aa4f5;">Start download</button>
+                    <button onClick="{{ closeConfirm }}" style="background:transparent; border:1px solid #262b35; color:#9aa1ab; padding:7px 13px; border-radius:7px; font-size:12.5px; cursor:pointer; font-family:inherit;" style-hover="background:#171b22;">Cancel</button>
+                    <span style="font-size:11.5px; color:#6b727d;">Runs in the background — you can keep browsing.</span>
+                  </div>
+                </div>
+              </sc-if>
+            </div>
+            <div style="width:262px; flex-shrink:0; background:#14171c; border:1px solid #1f242c; border-radius:12px; padding:14px; display:flex; flex-direction:column; gap:10px;">
+              <div style="display:flex; align-items:center; justify-content:space-between;">
+                <span style="font-size:12.5px; font-weight:600;">Auto-refresh</span>
+                <span style="width:34px; height:20px; border-radius:99px; background:#5b8def; position:relative; cursor:pointer; flex-shrink:0;"><span style="position:absolute; top:2px; right:2px; width:16px; height:16px; border-radius:99px; background:#0b0d10;"></span></span>
+              </div>
+              <div style="display:flex; gap:6px;">
+                <sc-for list="{{ intervals }}" as="iv" hint-placeholder-count="4">
+                  <div style="flex:1; text-align:center; padding:6px 0; border-radius:7px; font-family:'IBM Plex Mono', monospace; font-size:11.5px; cursor:pointer; border:1px solid {{ iv.border }}; background:{{ iv.bg }}; color:{{ iv.fg }};">{{ iv.label }}</div>
+                </sc-for>
+              </div>
+              <label style="display:flex; align-items:center; gap:8px; font-size:12.5px; color:#9aa1ab; cursor:pointer;">
+                <input type="checkbox" checked="checked" style="accent-color:#5b8def; width:14px; height:14px;">
+                Download new episodes
+              </label>
+              <div style="border-top:1px solid #1f242c; padding-top:9px; display:flex; flex-direction:column; gap:3px; font-size:11.5px; color:#6b727d; font-family:'IBM Plex Mono', monospace;">
+                <div>last check · {{ current.lastChecked }}</div>
+                <div>next check · in 9h</div>
+              </div>
+            </div>
+          </div>
+
+          <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; border-bottom:1px solid #1f242c; padding-bottom:14px;">
+            <sc-for list="{{ epFilters }}" as="f" hint-placeholder-count="4">
+              <div onClick="{{ f.go }}" style="display:flex; align-items:center; gap:7px; padding:6px 12px; border-radius:99px; font-size:12.5px; font-weight:500; cursor:pointer; border:1px solid {{ f.border }}; background:{{ f.bg }}; color:{{ f.fg }};">
+                {{ f.label }}
+                <span style="font-family:'IBM Plex Mono', monospace; font-size:11px; opacity:0.75;">{{ f.count }}</span>
+              </div>
+            </sc-for>
+            <div style="flex:1;"></div>
+            <div style="display:flex; align-items:center; gap:8px; background:#14171c; border:1px solid #262b35; border-radius:8px; padding:6px 10px; width:240px;">
+              <span style="color:#6b727d; font-size:12px;">⌕</span>
+              <input value="{{ epQuery }}" onInput="{{ onEpQuery }}" placeholder="Filter episodes" style="flex:1; min-width:0; background:transparent; border:none; outline:none; color:#e9ebee; font-size:12.5px;">
+            </div>
+            <div style="font-family:'IBM Plex Mono', monospace; font-size:11.5px; color:#6b727d;">{{ epCountLabel }}</div>
+          </div>
+
+          <div style="display:flex; flex-direction:column;">
+            <sc-for list="{{ visibleEpisodes }}" as="ep" hint-placeholder-count="7">
+              <div style="display:grid; grid-template-columns:38px 52px minmax(0,1fr) 72px 104px 84px; gap:14px; align-items:center; padding:{{ rowPad }} 10px; border-bottom:1px solid #171b21; border-radius:8px;" style-hover="background:#12151b;">
+                <div onClick="{{ ep.play }}" style="width:32px; height:32px; border-radius:99px; border:1px solid #2b313c; display:flex; align-items:center; justify-content:center; cursor:pointer; color:{{ ep.playColor }}; font-size:11px; background:{{ ep.playBg }};" style-hover="border-color:#5b8def;">▶</div>
+                <div style="font-family:'IBM Plex Mono', monospace; font-size:12px; color:#6b727d;">{{ ep.label }}</div>
+                <div onClick="{{ ep.open }}" style="min-width:0; display:flex; flex-direction:column; gap:3px; cursor:pointer;">
+                  <div style="font-size:13.5px; font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ ep.title }}</div>
+                  <sc-if value="{{ showPath }}" hint-placeholder-val="{{ true }}">
+                    <div style="font-family:'IBM Plex Mono', monospace; font-size:11px; color:#565d68; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ ep.path }}</div>
+                  </sc-if>
+                </div>
+                <div style="font-family:'IBM Plex Mono', monospace; font-size:12px; color:#9aa1ab;">{{ ep.duration }}</div>
+                <div><span style="display:inline-flex; align-items:center; gap:6px; padding:3px 9px; border-radius:99px; font-size:11.5px; font-weight:600; background:{{ ep.chipBg }}; color:{{ ep.chipFg }};"><span style="width:5px; height:5px; border-radius:99px; background:{{ ep.chipFg }};"></span>{{ ep.status }}</span></div>
+                <!-- FASE 22 · per-row actions do what they say: ↓ fetches THIS episode only,
+                     ✎ opens rename in place rather than navigating to the detail page. -->
+                <div style="display:flex; gap:4px; justify-content:flex-end; color:#565d68; font-size:12.5px;">
+                  <button onClick="{{ ep.rename }}" title="Rename" aria-label="Rename episode" style="width:26px; height:26px; border-radius:6px; display:flex; align-items:center; justify-content:center; cursor:pointer; background:transparent; border:none; color:inherit; font-size:12.5px;" style-hover="background:#1b1f26; color:#e9ebee;">✎</button>
+                  <button onClick="{{ ep.download }}" title="{{ ep.downloadTitle }}" aria-label="{{ ep.downloadTitle }}" style="width:26px; height:26px; border-radius:6px; display:flex; align-items:center; justify-content:center; cursor:pointer; background:transparent; border:none; color:{{ ep.downloadColor }}; font-size:12.5px;" style-hover="background:#1b1f26; color:#e9ebee;">↓</button>
+                  <button onClick="{{ ep.open }}" title="Open episode" aria-label="Open episode" style="width:26px; height:26px; border-radius:6px; display:flex; align-items:center; justify-content:center; cursor:pointer; background:transparent; border:none; color:inherit; font-size:12.5px;" style-hover="background:#1b1f26; color:#e9ebee;">→</button>
+                </div>
+              </div>
+              <sc-if value="{{ ep.renaming }}" hint-placeholder-val="{{ true }}">
+                <div style="display:flex; gap:9px; align-items:center; flex-wrap:wrap; padding:11px 10px 15px 100px; border-bottom:1px solid #171b21; background:#101318;">
+                  <input value="{{ renameDraft }}" onInput="{{ onRenameDraft }}" placeholder="{{ ep.title }}" style="flex:1; min-width:220px; background:#0d1014; border:1px solid #262b35; color:#e9ebee; padding:8px 11px; border-radius:7px; font-size:13px; outline:none;">
+                  <button onClick="{{ saveRename }}" style="background:#5b8def; color:#0a0c10; padding:7px 13px; border-radius:7px; font-size:12.5px; font-weight:600; cursor:pointer; border:none; font-family:inherit;" style-hover="background:#7aa4f5;">Save &amp; rename files</button>
+                  <button onClick="{{ cancelRename }}" style="background:transparent; border:1px solid #262b35; color:#9aa1ab; padding:7px 12px; border-radius:7px; font-size:12.5px; cursor:pointer; font-family:inherit;" style-hover="background:#171b22;">Cancel</button>
+                  <span style="font-size:11.5px; color:#6b727d;">Renames the folder, the file and the TIT2 tag.</span>
+                </div>
+              </sc-if>
+            </sc-for>
+          </div>
+
+          <div style="display:flex; align-items:center; justify-content:center; gap:12px; font-size:12.5px; color:#6b727d;">
+            <span style="padding:6px 11px; border:1px solid #262b35; border-radius:7px; cursor:pointer;">← Previous</span>
+            <span style="font-family:'IBM Plex Mono', monospace;">page 1 / 5</span>
+            <span style="padding:6px 11px; border:1px solid #262b35; border-radius:7px; cursor:pointer;">Next →</span>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ============ EPISODE DETAIL ============ -->
+      <sc-if value="{{ isEpisode }}" hint-placeholder-val="{{ true }}">
+        <div data-screen-label="Episode detail" style="max-width:1000px; display:flex; flex-direction:column; gap:22px;">
+          <div onClick="{{ goPodcast }}" style="font-size:12.5px; color:#9aa1ab; cursor:pointer; width:fit-content;">← {{ current.display }}</div>
+
+          <div style="display:flex; gap:22px; flex-wrap:wrap; align-items:flex-start;">
+            <div style="width:148px; height:148px; flex-shrink:0; border-radius:12px; border:1px solid #262b35; background:{{ current.cover }}; display:flex; align-items:center; justify-content:center; font-family:'IBM Plex Mono', monospace; font-size:10px; letter-spacing:0.08em; color:rgba(255,255,255,0.5); text-transform:uppercase;">episode art</div>
+            <div style="flex:1; min-width:300px; display:flex; flex-direction:column; gap:12px;">
+              <div style="display:flex; align-items:center; gap:9px;">
+                <span style="font-family:'IBM Plex Mono', monospace; font-size:11.5px; color:#6b727d;">{{ selected.label }}</span>
+                <span style="display:inline-flex; align-items:center; gap:6px; padding:3px 9px; border-radius:99px; font-size:11.5px; font-weight:600; background:{{ selected.chipBg }}; color:{{ selected.chipFg }};">{{ selected.status }}</span>
+              </div>
+              <div style="font-size:24px; font-weight:700; letter-spacing:-0.02em; line-height:1.25; text-wrap:pretty;">{{ selected.title }}</div>
+              <div style="font-size:13.5px; line-height:1.6; color:#9aa1ab; max-width:620px; text-wrap:pretty;">{{ selected.summary }}</div>
+              <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+                <div onClick="{{ playSelected }}" style="display:flex; align-items:center; gap:8px; background:#5b8def; color:#0a0c10; padding:9px 16px; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer;" style-hover="background:#7aa4f5;">▶ Play</div>
+                <div style="border:1px solid #262b35; color:#e9ebee; padding:9px 14px; border-radius:8px; font-size:13px; cursor:pointer;" style-hover="background:#171b22;">Reveal in folder</div>
+                <div style="border:1px solid #262b35; color:#e9ebee; padding:9px 14px; border-radius:8px; font-size:13px; cursor:pointer;" style-hover="background:#171b22;">Re-download</div>
+              </div>
+            </div>
+          </div>
+
+          <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); gap:16px;">
+            <div style="background:#14171c; border:1px solid #1f242c; border-radius:12px; padding:16px;">
+              <div style="font-size:12.5px; font-weight:600; margin-bottom:12px;">Custom name</div>
+              <div style="font-size:12px; color:#6b727d; line-height:1.5; margin-bottom:10px;">Overrides the feed title for the folder, the filename and the <span style="font-family:'IBM Plex Mono', monospace;">TIT2</span> ID3 tag. Survives re-syncing the feed.</div>
+              <input value="{{ selected.custom }}" onInput="{{ onCustom }}" style="width:100%; box-sizing:border-box; background:#0d1014; border:1px solid #262b35; color:#e9ebee; padding:9px 11px; border-radius:8px; font-size:13px; outline:none;">
+              <div style="display:flex; gap:8px; margin-top:10px; align-items:center;">
+                <div style="background:#5b8def; color:#0a0c10; padding:7px 13px; border-radius:7px; font-size:12.5px; font-weight:600; cursor:pointer;">Save &amp; rename files</div>
+                <div style="color:#6b727d; font-size:12px; cursor:pointer;">Reset to feed title</div>
+              </div>
+            </div>
+
+            <div style="background:#14171c; border:1px solid #1f242c; border-radius:12px; padding:16px;">
+              <div style="font-size:12.5px; font-weight:600; margin-bottom:12px;">Metadata</div>
+              <div style="display:flex; flex-direction:column;">
+                <sc-for list="{{ selected.meta }}" as="m" hint-placeholder-count="7">
+                  <div style="display:flex; justify-content:space-between; gap:14px; padding:6px 0; border-bottom:1px solid #171b21; font-size:12.5px;">
+                    <span style="color:#6b727d;">{{ m.k }}</span>
+                    <span style="font-family:'IBM Plex Mono', monospace; color:#e9ebee; text-align:right; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ m.v }}</span>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </div>
+
+          <div style="background:#14171c; border:1px solid #1f242c; border-radius:12px; padding:16px;">
+            <div style="font-size:12.5px; font-weight:600; margin-bottom:10px;">Files on disk</div>
+            <div style="display:flex; flex-direction:column; gap:6px; font-family:'IBM Plex Mono', monospace; font-size:12px;">
+              <div style="color:#9aa1ab;">downloads/{{ current.name }}/2026/08/214 - Lo que queda cuando se apaga el micrófono/</div>
+              <div style="display:flex; justify-content:space-between; padding-left:18px; color:#e9ebee;"><span>↳ Lo que queda… - {{ current.name }}.mp3</span><span style="color:#6b727d;">78.2 MB</span></div>
+              <div style="display:flex; justify-content:space-between; padding-left:18px; color:#e9ebee;"><span>↳ episode_image.jpg</span><span style="color:#6b727d;">184 KB</span></div>
+              <div style="display:flex; justify-content:space-between; padding-left:18px; color:#e9ebee;"><span>↳ episode_metadata.xml</span><span style="color:#6b727d;">12 KB</span></div>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ============ QUEUE ============ -->
+      <sc-if value="{{ isQueue }}" hint-placeholder-val="{{ true }}">
+        <div data-screen-label="Download queue" style="max-width:1100px; display:flex; flex-direction:column; gap:20px;">
+
+          <div style="background:#14171c; border:1px solid #262b35; border-radius:14px; padding:18px; display:flex; flex-direction:column; gap:14px;">
+            <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+              <span style="display:inline-flex; align-items:center; gap:7px; font-size:11.5px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase; color:#5b8def;">
+                <span style="width:7px; height:7px; border-radius:99px; background:#5b8def; animation:pf-pulse 1.6s ease-in-out infinite;"></span>Downloading now
+              </span>
+              <div style="flex:1;"></div>
+              <button onClick="{{ togglePause }}" style="background:transparent; border:1px solid #262b35; color:#e9ebee; padding:6px 12px; border-radius:7px; font-size:12.5px; cursor:pointer; font-family:inherit;" style-hover="background:#171b22;">{{ pauseLabel }}</button>
+              <button onClick="{{ cancelAll }}" style="background:transparent; border:1px solid rgba(224,82,74,0.4); color:#e0524a; padding:6px 12px; border-radius:7px; font-size:12.5px; cursor:pointer; font-family:inherit;" style-hover="background:rgba(224,82,74,0.1);">Cancel all</button>
+            </div>
+
+            <div style="display:flex; gap:14px; align-items:center; flex-wrap:wrap;">
+              <div style="width:64px; height:64px; flex-shrink:0; border-radius:10px; border:1px solid #262b35; background:{{ podcasts.0.cover }};"></div>
+              <div style="flex:1; min-width:240px; display:flex; flex-direction:column; gap:7px;">
+                <div style="font-size:14px; font-weight:600;">{{ active.title }}</div>
+                <div style="font-family:'IBM Plex Mono', monospace; font-size:11.5px; color:#6b727d;">{{ active.podcast }} · episode {{ active.label }}</div>
+                <div style="height:6px; border-radius:99px; background:#1b1f26; overflow:hidden;">
+                  <div style="height:100%; background:#5b8def; width:{{ active.pct }};"></div>
+                </div>
+                <div style="display:flex; gap:16px; font-family:'IBM Plex Mono', monospace; font-size:11.5px; color:#9aa1ab; flex-wrap:wrap;">
+                  <span>{{ active.pct }}</span><span>{{ active.mb }}</span><span>{{ active.speed }}</span><span>eta {{ active.eta }}</span>
+                </div>
+              </div>
+              <div style="display:flex; flex-direction:column; gap:7px; align-items:flex-end; flex-shrink:0;">
+                <div onClick="{{ goActivity }}" style="font-family:'IBM Plex Mono', monospace; font-size:12px; color:#5b8def; cursor:pointer;">job {{ active.job }}</div>
+                <div style="font-size:12px; color:#6b727d;">{{ active.step }}</div>
+                <button onClick="{{ cancelJob }}" style="background:transparent; border:1px solid rgba(224,82,74,0.4); color:#e0524a; padding:5px 11px; border-radius:6px; font-size:12px; cursor:pointer; font-family:inherit;" style-hover="background:rgba(224,82,74,0.1);">Stop this one</button>
+              </div>
+            </div>
+          </div>
+
+          <div style="display:flex; flex-direction:column; gap:10px;">
+            <div style="display:flex; align-items:baseline; gap:10px;">
+              <div style="font-size:14px; font-weight:600;">Up next</div>
+              <div style="font-family:'IBM Plex Mono', monospace; font-size:11.5px; color:#6b727d;">17 episodes · 1.4 GB · ~26 min at current rate</div>
+            </div>
+            <div style="border:1px solid #1f242c; border-radius:12px; overflow:hidden;">
+              <sc-for list="{{ upNext }}" as="q" hint-placeholder-count="5">
+                <div style="display:grid; grid-template-columns:30px 1fr 130px 78px 72px 30px; gap:12px; align-items:center; padding:11px 14px; border-bottom:1px solid #171b21; background:#101318;" style-hover="background:#141821;">
+                  <div style="font-family:'IBM Plex Mono', monospace; font-size:11.5px; color:#565d68;">{{ q.pos }}</div>
+                  <div style="min-width:0; font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ q.title }}</div>
+                  <div style="font-family:'IBM Plex Mono', monospace; font-size:11.5px; color:#6b727d; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ q.podcast }}</div>
+                  <div style="font-family:'IBM Plex Mono', monospace; font-size:11.5px; color:#9aa1ab;">{{ q.size }}</div>
+                  <div style="font-size:11.5px; color:#6b727d;">{{ q.wait }}</div>
+                  <button onClick="{{ q.remove }}" title="Remove from queue" aria-label="Remove from queue" style="background:transparent; border:none; color:#565d68; font-size:13px; cursor:pointer; text-align:right; padding:0;" style-hover="color:#e0524a;">✕</button>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+
+          <div style="display:flex; flex-direction:column; gap:10px;">
+            <div style="font-size:14px; font-weight:600;">Finished today</div>
+            <div style="display:flex; flex-direction:column;">
+              <sc-for list="{{ finished }}" as="d" hint-placeholder-count="3">
+                <div style="display:grid; grid-template-columns:20px 1fr 130px 78px 90px; gap:12px; align-items:center; padding:9px 4px; border-bottom:1px solid #171b21; font-size:12.5px;">
+                  <div style="color:{{ d.color }};">{{ d.icon }}</div>
+                  <div style="min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#9aa1ab;">{{ d.title }}</div>
+                  <div style="font-family:'IBM Plex Mono', monospace; font-size:11.5px; color:#6b727d;">{{ d.podcast }}</div>
+                  <div style="font-family:'IBM Plex Mono', monospace; font-size:11.5px; color:#6b727d;">{{ d.size }}</div>
+                  <div style="font-family:'IBM Plex Mono', monospace; font-size:11.5px; color:#565d68; text-align:right;">{{ d.time }}</div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ============ SCHEDULE ============ -->
+      <sc-if value="{{ isSchedule }}" hint-placeholder-val="{{ true }}">
+        <div data-screen-label="Schedule" style="max-width:1180px; display:flex; flex-direction:column; gap:18px;">
+          <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
+            <div style="font-size:13px; color:#9aa1ab; max-width:620px; line-height:1.55;">The scheduler thread runs while the server is up and polls every <span style="font-family:'IBM Plex Mono', monospace; color:#e9ebee;">300s</span>. Feeds whose interval has elapsed are re-synced; podcasts with auto-download on also enqueue new episodes.</div>
+            <div style="flex:1;"></div>
+            <div style="display:flex; align-items:center; gap:8px; background:#14171c; border:1px solid #262b35; border-radius:8px; padding:8px 12px; font-size:12.5px;">
+              <span style="width:7px; height:7px; border-radius:99px; background:#3fb27f;"></span> scheduler running
+            </div>
+          </div>
+
+          <div style="border:1px solid #1f242c; border-radius:12px; overflow:hidden;">
+            <div style="display:grid; grid-template-columns:minmax(130px,1.4fr) minmax(118px,180px) 68px minmax(66px,92px) minmax(66px,92px); gap:12px; padding:11px 16px; background:#101318; border-bottom:1px solid #1f242c; font-size:11px; letter-spacing:0.07em; text-transform:uppercase; color:#6b727d; font-weight:600;">
+              <div>Podcast</div><div>Interval</div><div>Auto-download</div><div>Last check</div><div>Next check</div>
+            </div>
+            <sc-for list="{{ podcasts }}" as="p" hint-placeholder-count="8">
+              <div style="display:grid; grid-template-columns:minmax(130px,1.4fr) minmax(118px,180px) 68px minmax(66px,92px) minmax(66px,92px); gap:12px; padding:12px 16px; border-bottom:1px solid #171b21; align-items:center;" style-hover="background:#12151b;">
+                <div style="display:flex; align-items:center; gap:11px; min-width:0;">
+                  <div style="width:34px; height:34px; flex-shrink:0; border-radius:8px; border:1px solid #262b35; background:{{ p.cover }};"></div>
+                  <div style="min-width:0;">
+                    <div style="font-size:13px; font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ p.display }}</div>
+                    <div style="font-family:'IBM Plex Mono', monospace; font-size:11px; color:#565d68; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ p.name }}</div>
+                  </div>
+                </div>
+                <div style="display:flex; gap:3px; min-width:0;">
+                  <sc-for list="{{ p.intervalCells }}" as="c" hint-placeholder-count="5">
+                    <div style="flex:1; min-width:0; text-align:center; padding:5px 1px; border-radius:6px; font-family:'IBM Plex Mono', monospace; font-size:10px; cursor:pointer; overflow:hidden; border:1px solid {{ c.border }}; background:{{ c.bg }}; color:{{ c.fg }};">{{ c.label }}</div>
+                  </sc-for>
+                </div>
+                <div><span style="width:34px; height:20px; border-radius:99px; background:{{ p.autoBg }}; position:relative; display:inline-block; cursor:pointer;"><span style="position:absolute; top:2px; left:{{ p.knobLeft }}; width:16px; height:16px; border-radius:99px; background:{{ p.knobColor }};"></span></span></div>
+                <div style="font-family:'IBM Plex Mono', monospace; font-size:11.5px; color:#9aa1ab;">{{ p.lastChecked }}</div>
+                <div style="font-family:'IBM Plex Mono', monospace; font-size:11.5px; color:{{ p.nextColor }};">{{ p.nextCheck }}</div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ============ ACTIVITY ============ -->
+      <sc-if value="{{ isActivity }}" hint-placeholder-val="{{ true }}">
+        <div data-screen-label="Activity" style="max-width:1100px; display:flex; flex-direction:column; gap:18px;">
+          <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+            <sc-for list="{{ jobFilters }}" as="f" hint-placeholder-count="5">
+              <div onClick="{{ f.go }}" style="padding:6px 12px; border-radius:99px; font-size:12.5px; font-weight:500; cursor:pointer; border:1px solid {{ f.border }}; background:{{ f.bg }}; color:{{ f.fg }};">{{ f.label }}</div>
+            </sc-for>
+            <div style="flex:1;"></div>
+            <div style="font-family:'IBM Plex Mono', monospace; font-size:11.5px; color:#6b727d;">jobs table · sqlite</div>
+          </div>
+
+          <div style="display:flex; flex-direction:column;">
+            <sc-for list="{{ visibleJobs }}" as="j" hint-placeholder-count="8">
+              <div style="display:grid; grid-template-columns:22px minmax(96px,124px) minmax(150px,1fr) minmax(88px,116px) minmax(56px,72px) minmax(64px,86px); gap:12px; align-items:center; padding:12px 8px; border-bottom:1px solid #171b21;" style-hover="background:#12151b;">
+                <div style="color:{{ j.color }}; font-size:13px;">{{ j.icon }}</div>
+                <div style="font-family:'IBM Plex Mono', monospace; font-size:11.5px; color:#e9ebee; background:#161a21; border:1px solid #232833; border-radius:5px; padding:3px 7px; text-align:center;">{{ j.type }}</div>
+                <div style="min-width:0; font-size:13px; color:#c9ced6; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ j.detail }}</div>
+                <div style="font-family:'IBM Plex Mono', monospace; font-size:11.5px; color:#6b727d; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ j.target }}</div>
+                <div style="font-family:'IBM Plex Mono', monospace; font-size:11.5px; color:#6b727d;">{{ j.duration }}</div>
+                <div style="font-family:'IBM Plex Mono', monospace; font-size:11.5px; color:#565d68; text-align:right;">{{ j.when }}</div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ============ STORAGE ============ -->
+      <sc-if value="{{ isStorage }}" hint-placeholder-val="{{ true }}">
+        <div data-screen-label="Storage" style="max-width:1100px; display:flex; flex-direction:column; gap:20px;">
+          <div style="background:#14171c; border:1px solid #1f242c; border-radius:14px; padding:18px; display:flex; flex-direction:column; gap:14px;">
+            <div style="display:flex; align-items:baseline; gap:12px; flex-wrap:wrap;">
+              <div style="font-size:15px; font-weight:600;">Volume</div>
+              <div style="font-family:'IBM Plex Mono', monospace; font-size:12px; color:#6b727d;">/app/data/downloads · 465 GB</div>
+              <div style="flex:1;"></div>
+              <div style="border:1px solid #262b35; color:#e9ebee; padding:7px 13px; border-radius:7px; font-size:12.5px; cursor:pointer;" style-hover="background:#171b22;">Verify all files</div>
+            </div>
+            <div style="height:14px; border-radius:99px; overflow:hidden; display:flex; background:#1b1f26;">
+              <div style="width:36.2%; background:#5b8def;"></div>
+              <div style="width:4.1%; background:#8b7cf0;"></div>
+              <div style="width:2.6%; background:#e0a13a;"></div>
+            </div>
+            <div style="display:flex; gap:20px; flex-wrap:wrap; font-size:12.5px; color:#9aa1ab;">
+              <span style="display:flex; align-items:center; gap:7px;"><span style="width:8px; height:8px; border-radius:2px; background:#5b8def;"></span>Audio <span style="font-family:'IBM Plex Mono', monospace; color:#e9ebee;">168.4 GB</span></span>
+              <span style="display:flex; align-items:center; gap:7px;"><span style="width:8px; height:8px; border-radius:2px; background:#8b7cf0;"></span>Art &amp; metadata <span style="font-family:'IBM Plex Mono', monospace; color:#e9ebee;">19.1 GB</span></span>
+              <span style="display:flex; align-items:center; gap:7px;"><span style="width:8px; height:8px; border-radius:2px; background:#e0a13a;"></span>Orphaned files <span style="font-family:'IBM Plex Mono', monospace; color:#e9ebee;">12.0 GB</span></span>
+              <span style="display:flex; align-items:center; gap:7px;"><span style="width:8px; height:8px; border-radius:2px; background:#1b1f26;"></span>Free <span style="font-family:'IBM Plex Mono', monospace; color:#e9ebee;">265.5 GB</span></span>
+            </div>
+          </div>
+
+          <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:16px;">
+            <div style="background:#14171c; border:1px solid #1f242c; border-radius:12px; padding:16px; display:flex; flex-direction:column; gap:12px;">
+              <div style="font-size:12.5px; font-weight:600;">Largest podcasts</div>
+              <sc-for list="{{ storageRows }}" as="s" hint-placeholder-count="6">
+                <div style="display:flex; flex-direction:column; gap:5px;">
+                  <div style="display:flex; justify-content:space-between; font-size:12.5px;">
+                    <span style="color:#c9ced6; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ s.name }}</span>
+                    <span style="font-family:'IBM Plex Mono', monospace; color:#9aa1ab; flex-shrink:0; padding-left:10px;">{{ s.size }}</span>
+                  </div>
+                  <div style="height:4px; border-radius:99px; background:#1b1f26; overflow:hidden;"><div style="height:100%; background:#5b8def; width:{{ s.pct }};"></div></div>
+                </div>
+              </sc-for>
+            </div>
+
+            <div style="background:#14171c; border:1px solid #1f242c; border-radius:12px; padding:16px; display:flex; flex-direction:column; gap:12px;">
+              <div style="font-size:12.5px; font-weight:600;">Health</div>
+              <div style="display:flex; flex-direction:column; gap:9px;">
+                <!-- FASE 22 · corruption is the loudest thing on the page, and it names the files -->
+                <div style="padding:9px 11px; border-radius:9px; background:rgba(224,82,74,0.09); border:1px solid rgba(224,82,74,0.32); display:flex; flex-direction:column; gap:7px;">
+                  <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
+                    <span style="font-size:12.5px; color:#e0524a; font-weight:600;">3 files no longer match their checksum</span>
+                    <span onClick="{{ startVerify }}" style="font-size:12px; color:#e0524a; cursor:pointer; font-weight:600; flex-shrink:0;">Re-download all 3</span>
+                  </div>
+                  <div style="display:flex; flex-direction:column; gap:3px; font-family:'IBM Plex Mono', monospace; font-size:11px; color:#9aa1ab;">
+                    <div>the_long_view/2026/07/212 — last good 14d ago</div>
+                    <div>the_long_view/2025/11/188 — last good 2mo ago</div>
+                    <div>historia_en_cinta/2024/03/094 — last good 5mo ago</div>
+                  </div>
+                </div>
+
+                <div style="display:flex; justify-content:space-between; align-items:center; padding:9px 11px; border-radius:9px; background:rgba(224,161,58,0.09); border:1px solid rgba(224,161,58,0.28);">
+                  <span style="font-size:12.5px; color:#e0a13a;">14 episodes marked downloaded, file missing</span>
+                  <span onClick="{{ startVerify }}" style="font-size:12px; color:#e0a13a; cursor:pointer; font-weight:600;">Re-download</span>
+                </div>
+
+                <div style="display:flex; justify-content:space-between; align-items:center; padding:9px 11px; border-radius:9px; background:rgba(139,124,240,0.09); border:1px solid rgba(139,124,240,0.26);">
+                  <span style="font-size:12.5px; color:#a99df5;">41 episodes kept after leaving their feed</span>
+                  <span style="font-size:12px; color:#a99df5; cursor:pointer; font-weight:600;">Review</span>
+                </div>
+                <div style="display:flex; justify-content:space-between; align-items:center; padding:9px 11px; border-radius:9px; background:rgba(139,124,240,0.09); border:1px solid rgba(139,124,240,0.26);">
+                  <span style="font-size:12.5px; color:#a99df5;">312 files sit outside the current naming template</span>
+                  <span style="font-size:12px; color:#a99df5; cursor:pointer; font-weight:600;">Show plan</span>
+                </div>
+                <div style="display:flex; justify-content:space-between; align-items:center; padding:9px 11px; border-radius:9px; background:rgba(63,178,127,0.09); border:1px solid rgba(63,178,127,0.26);">
+                  <span style="font-size:12.5px; color:#3fb27f;">ID3 tags complete on 598 of 612 files</span>
+                  <span style="font-size:12px; color:#3fb27f; cursor:pointer; font-weight:600;">Retag</span>
+                </div>
+              </div>
+              <div style="border-top:1px solid #1f242c; padding-top:11px; font-size:12px; color:#6b727d; line-height:1.55;">Moving existing files still runs from the CLI: <span style="font-family:'IBM Plex Mono', monospace; color:#9aa1ab;">podcast-fetch migrate-layout --apply</span>. This screen only shows the dry-run plan.</div>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ============ SETTINGS ============ -->
+      <sc-if value="{{ isSettings }}" hint-placeholder-val="{{ true }}">
+        <div data-screen-label="Settings" style="max-width:900px; display:flex; flex-direction:column; gap:18px;">
+          <div style="background:#14171c; border:1px solid #1f242c; border-radius:12px; padding:18px; display:flex; flex-direction:column; gap:14px;">
+            <div>
+              <div style="font-size:14px; font-weight:600;">Folder &amp; filename naming</div>
+              <div style="font-size:12.5px; color:#6b727d; margin-top:5px; line-height:1.55;">Applies to new downloads only. Validated against two sample episodes — one numbered, one not — so a template that breaks on unnumbered episodes is rejected here, not mid-download.</div>
+            </div>
+
+            <div style="display:flex; flex-direction:column; gap:6px;">
+              <div style="font-size:11.5px; color:#9aa1ab; font-weight:500;">Folder</div>
+              <input value="{{ folderTemplate }}" onInput="{{ onFolder }}" style="width:100%; box-sizing:border-box; background:#0d1014; border:1px solid #262b35; color:#e9ebee; padding:10px 12px; border-radius:8px; font-family:'IBM Plex Mono', monospace; font-size:12.5px; outline:none;">
+            </div>
+            <div style="display:flex; flex-direction:column; gap:6px;">
+              <div style="font-size:11.5px; color:#9aa1ab; font-weight:500;">Filename</div>
+              <input value="{{ filenameTemplate }}" onInput="{{ onFilename }}" style="width:100%; box-sizing:border-box; background:#0d1014; border:1px solid #262b35; color:#e9ebee; padding:10px 12px; border-radius:8px; font-family:'IBM Plex Mono', monospace; font-size:12.5px; outline:none;">
+            </div>
+
+            <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
+              <span style="font-size:11.5px; color:#6b727d; margin-right:2px;">Insert:</span>
+              <sc-for list="{{ variables }}" as="v" hint-placeholder-count="9">
+                <div onClick="{{ v.insert }}" style="font-family:'IBM Plex Mono', monospace; font-size:11.5px; color:#c9ced6; background:#161a21; border:1px solid #262b35; border-radius:6px; padding:4px 8px; cursor:pointer;" style-hover="border-color:#5b8def; color:#5b8def;">{{ v.token }}</div>
+              </sc-for>
+            </div>
+
+            <div style="background:#0d1014; border:1px solid #262b35; border-radius:10px; padding:14px; display:flex; flex-direction:column; gap:9px;">
+              <div style="display:flex; align-items:center; gap:8px;">
+                <span style="font-size:11px; letter-spacing:0.07em; text-transform:uppercase; color:#6b727d; font-weight:600;">Live preview</span>
+                <span style="font-size:11.5px; color:#565d68;">episode 7 · season 2 · 2024-03-07</span>
+              </div>
+              <div style="font-family:'IBM Plex Mono', monospace; font-size:12.5px; display:flex; flex-direction:column; gap:5px;">
+                <div style="color:#6b727d;">folder</div>
+                <div style="color:#e9ebee; word-break:break-all;">downloads/{{ previewFolder }}/</div>
+                <div style="color:#6b727d; margin-top:4px;">file</div>
+                <div style="color:#e9ebee; word-break:break-all;">{{ previewFile }}.mp3</div>
+              </div>
+            </div>
+
+            <div style="display:flex; gap:9px; align-items:center;">
+              <div style="background:#5b8def; color:#0a0c10; padding:9px 15px; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer;" style-hover="background:#7aa4f5;">Save templates</div>
+              <div style="border:1px solid #262b35; color:#9aa1ab; padding:9px 14px; border-radius:8px; font-size:13px; cursor:pointer;" style-hover="background:#171b22;">Restore defaults</div>
+            </div>
+          </div>
+
+          <div style="background:#14171c; border:1px solid #1f242c; border-radius:12px; padding:18px; display:flex; flex-direction:column; gap:12px;">
+            <div style="font-size:14px; font-weight:600;">Environment</div>
+            <div style="display:flex; flex-direction:column;">
+              <sc-for list="{{ envRows }}" as="e" hint-placeholder-count="6">
+                <div style="display:flex; justify-content:space-between; gap:16px; padding:8px 0; border-bottom:1px solid #171b21; font-size:12.5px;">
+                  <span style="font-family:'IBM Plex Mono', monospace; color:#9aa1ab;">{{ e.k }}</span>
+                  <span style="font-family:'IBM Plex Mono', monospace; color:#e9ebee; text-align:right; word-break:break-all;">{{ e.v }}</span>
+                </div>
+              </sc-for>
+            </div>
+            <div style="font-size:12px; color:#6b727d;">Read-only here — set through <span style="font-family:'IBM Plex Mono', monospace; color:#9aa1ab;">docker-compose.yml</span> or the environment.</div>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ============ MOBILE ============ -->
+      <sc-if value="{{ isMobile }}" hint-placeholder-val="{{ true }}">
+        <div data-screen-label="Mobile" style="display:flex; gap:40px; flex-wrap:wrap; align-items:flex-start;">
+          <div style="max-width:340px; display:flex; flex-direction:column; gap:10px;">
+            <div style="font-size:15px; font-weight:600;">Phone layout</div>
+            <div style="font-size:13px; color:#9aa1ab; line-height:1.6;">Same server-rendered pages, one column: the podcast grid collapses to two covers per row, episode rows drop the path and the rename field behind a sheet, and the player docks above the tab bar. Touch targets stay at 44px.</div>
+          </div>
+
+          <x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" dark="{{ true }}" hint-size="402px,874px">
+            <div style="height:100%; background:#0b0d10; color:#e9ebee; font-family:'IBM Plex Sans', Helvetica, Arial, sans-serif; padding:58px 0 0 0; display:flex; flex-direction:column;">
+              <div style="padding:8px 18px 12px 18px; display:flex; align-items:center; justify-content:space-between;">
+                <div style="font-size:24px; font-weight:700; letter-spacing:-0.02em;">Library</div>
+                <div style="width:34px; height:34px; border-radius:99px; border:1px solid #262b35; display:flex; align-items:center; justify-content:center; color:#9aa1ab;">⌕</div>
+              </div>
+
+              <div style="padding:0 18px 12px 18px; display:flex; gap:8px; overflow:hidden;">
+                <div style="padding:7px 13px; border-radius:99px; background:#5b8def; color:#0a0c10; font-size:12.5px; font-weight:600; white-space:nowrap;">All</div>
+                <div style="padding:7px 13px; border-radius:99px; border:1px solid #262b35; color:#9aa1ab; font-size:12.5px; white-space:nowrap;">Pending</div>
+                <div style="padding:7px 13px; border-radius:99px; border:1px solid #262b35; color:#9aa1ab; font-size:12.5px; white-space:nowrap;">Missing</div>
+              </div>
+
+              <div style="padding:0 18px; display:grid; grid-template-columns:1fr 1fr; gap:14px;">
+                <sc-for list="{{ mobileTiles }}" as="m" hint-placeholder-count="4">
+                  <div style="display:flex; flex-direction:column; gap:7px;">
+                    <div style="aspect-ratio:1/1; border-radius:12px; border:1px solid #262b35; background:{{ m.cover }}; display:flex; align-items:flex-end; padding:8px;">
+                      <div style="background:rgba(8,10,13,0.82); border-radius:99px; padding:3px 8px; font-family:'IBM Plex Mono', monospace; font-size:10.5px;">{{ m.ratio }}</div>
+                    </div>
+                    <div style="font-size:12.5px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ m.display }}</div>
+                    <div style="font-size:11px; color:#6b727d; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ m.statusLine }}</div>
+                  </div>
+                </sc-for>
+              </div>
+
+              <div style="flex:1;"></div>
+
+              <div style="margin:0 12px 8px 12px; padding:10px; border-radius:14px; background:#161a21; border:1px solid #262b35; display:flex; align-items:center; gap:11px;">
+                <div style="width:44px; height:44px; border-radius:9px; border:1px solid #2b313c; background:{{ podcasts.0.cover }}; flex-shrink:0;"></div>
+                <div style="flex:1; min-width:0;">
+                  <div style="font-size:12.5px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ nowPlaying.title }}</div>
+                  <div style="font-size:11px; color:#6b727d; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ nowPlaying.podcast }}</div>
+                  <div style="height:3px; border-radius:99px; background:#252a33; margin-top:6px; overflow:hidden;"><div style="height:100%; width:34%; background:#5b8def;"></div></div>
+                </div>
+                <div style="width:44px; height:44px; border-radius:99px; background:#5b8def; color:#0a0c10; display:flex; align-items:center; justify-content:center; font-size:14px; flex-shrink:0;">⏸</div>
+              </div>
+
+              <div style="display:flex; justify-content:space-around; padding:8px 0 30px 0; border-top:1px solid #1f242c;">
+                <div style="display:flex; flex-direction:column; align-items:center; gap:3px; color:#5b8def; font-size:10.5px; width:64px;"><span style="font-size:15px;">▦</span>Library</div>
+                <div style="display:flex; flex-direction:column; align-items:center; gap:3px; color:#6b727d; font-size:10.5px; width:64px;"><span style="font-size:15px;">↓</span>Queue</div>
+                <div style="display:flex; flex-direction:column; align-items:center; gap:3px; color:#6b727d; font-size:10.5px; width:64px;"><span style="font-size:15px;">◷</span>Activity</div>
+                <div style="display:flex; flex-direction:column; align-items:center; gap:3px; color:#6b727d; font-size:10.5px; width:64px;"><span style="font-size:15px;">⚙</span>Settings</div>
+              </div>
+            </div>
+          </x-import>
+        </div>
+      </sc-if>
+
+    </div>
+
+    <!-- ===================== PLAYER ===================== -->
+    <sc-if value="{{ showPlayer }}" hint-placeholder-val="{{ true }}">
+    <div style="position:fixed; left:236px; right:0; bottom:0; z-index:8; background:rgba(16,19,24,0.97); backdrop-filter:blur(10px); border-top:1px solid #262b35; padding:12px 20px; display:flex; align-items:center; gap:16px;">
+      <div style="display:flex; align-items:center; gap:12px; width:260px; min-width:0; flex-shrink:0;">
+        <div style="width:48px; height:48px; border-radius:9px; border:1px solid #2b313c; flex-shrink:0; background:{{ podcasts.0.cover }};"></div>
+        <div style="min-width:0;">
+          <div style="font-size:12.5px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ nowPlaying.title }}</div>
+          <div style="font-family:'IBM Plex Mono', monospace; font-size:11px; color:#6b727d; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ nowPlaying.podcast }}</div>
+        </div>
+      </div>
+
+      <div style="flex:1; min-width:0; display:flex; flex-direction:column; gap:7px; align-items:center;">
+        <!-- FASE 22 · real buttons: focusable, keyboard-operable, labelled -->
+        <div style="display:flex; align-items:center; gap:14px;">
+          <button aria-label="Previous episode" title="Previous episode" style="background:transparent; border:none; color:#9aa1ab; font-size:13px; cursor:pointer; padding:2px;" style-hover="color:#e9ebee;" style-focus="color:#5b8def; outline:1px solid #5b8def; outline-offset:2px; border-radius:4px;">⏮</button>
+          <button aria-label="Back 15 seconds" title="Back 15 seconds" style="background:transparent; border:none; color:#9aa1ab; font-family:'IBM Plex Mono', monospace; font-size:11px; cursor:pointer; padding:2px;" style-hover="color:#e9ebee;" style-focus="color:#5b8def; outline:1px solid #5b8def; outline-offset:2px; border-radius:4px;">−15</button>
+          <button onClick="{{ togglePlay }}" aria-label="{{ playLabel }}" title="{{ playLabel }}" style="width:34px; height:34px; border-radius:99px; background:#5b8def; color:#0a0c10; display:flex; align-items:center; justify-content:center; font-size:13px; cursor:pointer; border:none; padding:0;" style-hover="background:#7aa4f5;" style-focus="outline:2px solid #e9ebee; outline-offset:2px;">{{ playGlyph }}</button>
+          <button aria-label="Forward 30 seconds" title="Forward 30 seconds" style="background:transparent; border:none; color:#9aa1ab; font-family:'IBM Plex Mono', monospace; font-size:11px; cursor:pointer; padding:2px;" style-hover="color:#e9ebee;" style-focus="color:#5b8def; outline:1px solid #5b8def; outline-offset:2px; border-radius:4px;">+30</button>
+          <button aria-label="Next episode" title="Next episode" style="background:transparent; border:none; color:#9aa1ab; font-size:13px; cursor:pointer; padding:2px;" style-hover="color:#e9ebee;" style-focus="color:#5b8def; outline:1px solid #5b8def; outline-offset:2px; border-radius:4px;">⏭</button>
+        </div>
+        <div style="width:100%; max-width:620px; display:flex; align-items:center; gap:10px;">
+          <span style="font-family:'IBM Plex Mono', monospace; font-size:11px; color:#6b727d; width:40px; text-align:right;">{{ elapsed }}</span>
+          <div onClick="{{ seek }}" style="flex:1; height:4px; border-radius:99px; background:#252a33; position:relative; cursor:pointer;">
+            <div style="position:absolute; left:0; top:0; bottom:0; border-radius:99px; background:#5b8def; width:{{ playedPct }};"></div>
+            <div style="position:absolute; top:-4px; left:{{ playedPct }}; width:12px; height:12px; margin-left:-6px; border-radius:99px; background:#e9ebee; border:2px solid #101318;"></div>
+          </div>
+          <span style="font-family:'IBM Plex Mono', monospace; font-size:11px; color:#6b727d; width:40px;">{{ remaining }}</span>
+        </div>
+      </div>
+
+      <div style="display:flex; align-items:center; gap:12px; flex-shrink:0;">
+        <button onClick="{{ cycleSpeed }}" aria-label="Playback speed" title="Playback speed" style="font-family:'IBM Plex Mono', monospace; font-size:11.5px; color:#9aa1ab; background:transparent; border:1px solid #262b35; border-radius:6px; padding:4px 8px; cursor:pointer;" style-hover="border-color:#5b8def; color:#5b8def;" style-focus="border-color:#5b8def; color:#5b8def; outline:none;">{{ speed }}</button>
+        <button aria-label="Queue" title="Queue" style="background:transparent; border:none; color:#9aa1ab; font-size:13px; cursor:pointer; padding:2px;" style-hover="color:#e9ebee;">▤</button>
+      </div>
+    </div>
+    </sc-if>
+
+  </div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;density&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;balanced&quot;,&quot;options&quot;:[&quot;dense&quot;,&quot;balanced&quot;,&quot;roomy&quot;],&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Layout&quot;},&quot;showPathColumn&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Layout&quot;},&quot;showPlayer&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Layout&quot;}}">
+const ACCENT = '#5b8def', OK = '#3fb27f', WARN = '#e0a13a', DIM = '#9aa1ab', TXT = '#e9ebee';
+
+function cover(hue) {
+  const a = `oklch(0.44 0.065 ${hue})`, b = `oklch(0.31 0.055 ${hue})`;
+  return `repeating-linear-gradient(135deg, ${a} 0 11px, ${b} 11px 22px)`;
+}
+
+const PODCASTS = [
+  { name: 'the_long_view', display: 'The Long View', author: 'Marguerite Oyer', total: 214, downloaded: 128, missing: 4, size: '46.1 GB', hue: 250, interval: 12, auto: true, lastChecked: '3h ago', nextCheck: 'in 9h', corrupt: 2, localOnly: 11 },
+  { name: 'field_notes_semanal', display: 'Field Notes Semanal', author: 'Estudio Bruma', total: 46, downloaded: 46, missing: 0, size: '9.8 GB', hue: 196, interval: 168, auto: true, lastChecked: '2d ago', nextCheck: 'in 5d' },
+  { name: 'taller_de_sonido', display: 'Taller de Sonido', author: 'Nilda Rey', total: 89, downloaded: 3, missing: 0, size: '0.7 GB', hue: 322, interval: 24, auto: false, lastChecked: '16h ago', nextCheck: 'in 8h' },
+  { name: 'historia_en_cinta', display: 'Historia en Cinta', author: 'Archivo Sonoro', total: 158, downloaded: 151, missing: 7, size: '38.4 GB', hue: 148, interval: 24, auto: true, lastChecked: '40 min ago', nextCheck: 'in 23h', corrupt: 1, localOnly: 30 },
+  { name: 'after_hours_build', display: 'After Hours Build', author: 'Tomas Reiter', total: 121, downloaded: 96, missing: 1, size: '22.9 GB', hue: 62, interval: 6, auto: true, lastChecked: 'a moment ago', nextCheck: 'in 6h' },
+  { name: 'cocina_de_barrio', display: 'Cocina de Barrio', author: 'Lucía Ferrán', total: 203, downloaded: 84, missing: 2, size: '19.6 GB', hue: 28, interval: 0, auto: false, lastChecked: 'never', nextCheck: 'off' },
+  { name: 'signal_and_static', display: 'Signal & Static', author: 'K. Adeyemi', total: 132, downloaded: 74, missing: 0, size: '17.2 GB', hue: 284, interval: 12, auto: false, lastChecked: '7h ago', nextCheck: 'in 5h' },
+  { name: 'martes_de_archivo', display: 'Martes de Archivo', author: 'Radio Vecinal', total: 80, downloaded: 30, missing: 0, size: '13.7 GB', hue: 104, interval: 0, auto: false, lastChecked: 'never', nextCheck: 'off' },
+];
+
+const EPISODES = [
+  { n: 214, title: 'Lo que queda cuando se apaga el micrófono', duration: '1:04:22', status: 'downloaded', date: '2026-08-28', size: '78.2 MB', custom: 'Lo que queda cuando se apaga el micrófono' },
+  { n: 213, title: 'Archivos que nadie volvió a abrir', duration: '52:10', status: 'downloaded', date: '2026-08-21', size: '63.4 MB', custom: '' },
+  { n: 212, title: 'Una hora con el archivista', duration: '1:12:44', status: 'missing', date: '2026-08-14', size: '88.9 MB', custom: '' },
+  { n: 211, title: 'El costo de guardar todo', duration: '47:03', status: 'pending', date: '2026-08-07', size: '—', custom: '' },
+  { n: 210, title: 'Temporada 4, cierre', duration: '1:29:57', status: 'pending', date: '2026-07-31', size: '—', custom: '' },
+  { n: 209, title: 'Cintas prestadas, parte dos', duration: '58:31', status: 'downloaded', date: '2026-07-24', size: '71.0 MB', custom: '' },
+  { n: 208, title: 'Cintas prestadas, parte uno', duration: '1:01:16', status: 'downloaded', date: '2026-07-17', size: '74.3 MB', custom: '' },
+];
+
+const JOBS = [
+  { type: 'download_all', detail: '18 of 86 episodes · running', target: 'the_long_view', duration: '4m 12s', when: '14:22', state: 'running' },
+  { type: 'add_feed', detail: 'Feed parsed, 80 episodes stored', target: 'martes_de_archivo', duration: '11.4s', when: '13:58', state: 'ok' },
+  { type: 'verify', detail: '4 files missing, marked for re-download', target: 'the_long_view', duration: '2.8s', when: '11:07', state: 'warn' },
+  { type: 'download_last', detail: 'Episode 46 downloaded and tagged', target: 'field_notes_semanal', duration: '38.6s', when: '09:41', state: 'ok' },
+  { type: 'scheduled_sync', detail: 'No new episodes', target: 'signal_and_static', duration: '1.9s', when: '08:15', state: 'ok' },
+  { type: 'download_all', detail: 'HTTP 403 on episode 91 after 3 retries', target: 'cocina_de_barrio', duration: '1m 02s', when: '07:30', state: 'err' },
+  { type: 'rename', detail: "'Ep. 214' → 'Lo que queda cuando…' · files renamed", target: 'the_long_view', duration: '0.4s', when: 'yesterday', state: 'ok' },
+  { type: 'scheduled_sync', detail: '2 new episodes enqueued', target: 'after_hours_build', duration: '3.2s', when: 'yesterday', state: 'ok' },
+];
+
+class Component extends DCLogic {
+  state = {
+    screen: 'library', libFilter: 'All', epFilter: 'All', jobFilter: 'All',
+    query: '', epQuery: '', current: 0, selected: 0, playing: true, pct: 34,
+    dlPct: 21, custom: EPISODES[0].custom,
+    // Fase 22
+    job: { active: true, label: 'Downloading', detail: 'the_long_view · 18 of 86', kind: 'download' },
+    toast: null, confirmOpen: false, paused: false, renamingId: null, renameDraft: '',
+    removed: [], speedIndex: 0,
+    folderTemplate: '{podcast_name}/{year}/{month}/{episode_label} - {episode_title}',
+    filenameTemplate: '{episode_title} - {podcast_name}',
+  };
+
+  componentDidMount() {
+    this.timer = setInterval(() => {
+      this.setState(s => ({ dlPct: s.dlPct >= 99 ? 4 : s.dlPct + 1, pct: s.playing ? (s.pct >= 100 ? 0 : s.pct + 0.25) : s.pct }));
+    }, 900);
+  }
+  componentWillUnmount() { clearInterval(this.timer); }
+
+  go(screen) { this.setState({ screen }); }
+
+  flash(message, tone = 'ok', action = null, onAction = null) {
+    clearTimeout(this._toastTimer);
+    this.setState({ toast: { message, tone, action, onAction } });
+    this._toastTimer = setTimeout(() => this.setState({ toast: null }), 6000);
+  }
+
+  // Fase 22: an action enqueues and stays put — no interstitial page.
+  enqueue(label, detail, message, kind = 'download') {
+    this.setState({ job: { active: true, label, detail, kind }, confirmOpen: false });
+    this.flash(message, 'ok', 'View queue →', () => this.go('queue'));
+  }
+
+  chip(status) {
+    if (status === 'downloaded') return { bg: 'rgba(63,178,127,0.14)', fg: OK };
+    if (status === 'missing') return { bg: 'rgba(224,161,58,0.14)', fg: WARN };
+    return { bg: 'rgba(154,161,171,0.13)', fg: DIM };
+  }
+
+  pill(active) {
+    return active
+      ? { bg: 'rgba(91,141,239,0.14)', fg: ACCENT, border: 'rgba(91,141,239,0.45)' }
+      : { bg: 'transparent', fg: DIM, border: '#262b35' };
+  }
+
+  renderVals() {
+    const s = this.state;
+    const p = PODCASTS[s.current];
+    const q = s.query.trim().toLowerCase();
+
+    const navDef = [
+      { key: 'library', label: 'Library', glyph: '▦' },
+      { key: 'queue', label: 'Queue', glyph: '↓', count: '18', countColor: ACCENT, countBg: 'rgba(91,141,239,0.14)' },
+      { key: 'schedule', label: 'Schedule', glyph: '◴' },
+      { key: 'activity', label: 'Activity', glyph: '◷' },
+      { key: 'storage', label: 'Storage', glyph: '▤', count: '14', countColor: WARN, countBg: 'rgba(224,161,58,0.14)' },
+      { key: 'settings', label: 'Settings', glyph: '⚙' },
+    ];
+    const activeScreen = s.screen === 'podcast' || s.screen === 'episode' ? 'library' : s.screen;
+    const nav = navDef.map(n => ({
+      ...n,
+      bg: activeScreen === n.key ? 'rgba(91,141,239,0.13)' : 'transparent',
+      fg: activeScreen === n.key ? ACCENT : '#c9ced6',
+      go: () => this.go(n.key),
+    }));
+
+    const titles = {
+      library: ['Library', '8 podcasts · 1,043 episodes'],
+      podcast: [p.display, p.name],
+      episode: ['Episode', p.display],
+      queue: ['Download queue', '1 running · 17 waiting'],
+      schedule: ['Schedule', 'auto-refresh per podcast'],
+      activity: ['Activity', 'job history'],
+      storage: ['Storage', '/app/data/downloads'],
+      settings: ['Settings', 'naming templates & environment'],
+      mobile: ['Mobile preview', '402 × 874'],
+    };
+
+    const libFilters = ['All', 'Incomplete', 'Missing files', 'Scheduled'].map(label => {
+      const c = this.pill(s.libFilter === label);
+      return { label, ...c, go: () => this.setState({ libFilter: label }) };
+    });
+
+    const matches = pod => {
+      if (q && !(pod.display.toLowerCase().includes(q) || pod.name.includes(q))) return false;
+      if (s.libFilter === 'Incomplete') return pod.downloaded < pod.total;
+      if (s.libFilter === 'Missing files') return pod.missing > 0;
+      if (s.libFilter === 'Scheduled') return pod.interval > 0;
+      return true;
+    };
+
+    const decorate = (pod, i) => {
+      const ratioPct = Math.round((pod.downloaded / pod.total) * 100);
+      const complete = pod.downloaded === pod.total;
+      return {
+        ...pod,
+        cover: cover(pod.hue),
+        corrupt: pod.corrupt || 0,
+        localOnly: pod.localOnly || 0,
+        ratio: `${pod.downloaded}/${pod.total}`,
+        pct: ratioPct + '%',
+        dotColor: pod.missing > 0 ? WARN : complete ? OK : ACCENT,
+        statusLine: pod.missing > 0 ? `${pod.missing} missing` : complete ? 'complete' : `${pod.total - pod.downloaded} pending`,
+        open: () => this.setState({ screen: 'podcast', current: PODCASTS.indexOf(pod) }),
+      };
+    };
+
+    // Counts come from the podcast totals, not the 7-row mock, so the pills agree with the hero.
+    const epCount = {
+      All: p.total,
+      Downloaded: p.downloaded,
+      Missing: p.missing,
+      Pending: p.total - p.downloaded - p.missing,
+    };
+    const epFilters = ['All', 'Downloaded', 'Missing', 'Pending'].map(label => {
+      const c = this.pill(s.epFilter === label);
+      return { label, count: epCount[label], ...c, go: () => this.setState({ epFilter: label }) };
+    });
+
+    const eq = s.epQuery.trim().toLowerCase();
+    const eps = EPISODES.filter(e => {
+      if (eq && !e.title.toLowerCase().includes(eq)) return false;
+      if (s.epFilter === 'Downloaded') return e.status === 'downloaded';
+      if (s.epFilter === 'Missing') return e.status === 'missing';
+      if (s.epFilter === 'Pending') return e.status === 'pending';
+      return true;
+    });
+
+    const epRow = e => {
+      const c = this.chip(e.status);
+      const idx = EPISODES.indexOf(e);
+      const needsFetch = e.status !== 'downloaded';
+      return {
+        label: String(e.n).padStart(3, '0'),
+        title: e.custom || e.title,
+        duration: e.duration,
+        status: e.status,
+        chipBg: c.bg, chipFg: c.fg,
+        renaming: s.renamingId === e.n,
+        rename: () => this.setState({ renamingId: e.n, renameDraft: e.custom || e.title }),
+        downloadTitle: needsFetch ? 'Download this episode' : 'Re-download this episode',
+        downloadColor: needsFetch ? '#5b8def' : '#565d68',
+        download: () => this.enqueue(
+          'Downloading', `${p.name} · episode ${String(e.n).padStart(3, '0')}`,
+          `Queued “${e.custom || e.title}” — this episode only.`,
+        ),
+        playColor: e.status === 'downloaded' ? TXT : '#4a5058',
+        playBg: e.status === 'downloaded' ? '#1b1f26' : 'transparent',
+        path: e.status === 'pending' ? 'not downloaded' : `downloads/${p.name}/${e.date.slice(0, 4)}/${e.date.slice(5, 7)}/${String(e.n).padStart(3, '0')} - ${e.title}`,
+        open: () => this.setState({ screen: 'episode', selected: idx, custom: e.custom }),
+        play: () => this.setState({ playing: true, selected: idx }),
+      };
+    };
+
+    const sel = EPISODES[s.selected];
+    const selChip = this.chip(sel.status);
+
+    const intervalLabels = [{ h: 0, label: 'off' }, { h: 6, label: '6h' }, { h: 12, label: '12h' }, { h: 24, label: '24h' }, { h: 168, label: '7d' }];
+
+    const jobFilters = ['All', 'Downloads', 'Syncs', 'Verify', 'Errors'].map(label => {
+      const c = this.pill(s.jobFilter === label);
+      return { label, ...c, go: () => this.setState({ jobFilter: label }) };
+    });
+
+    const jobIcon = { ok: ['✓', OK], warn: ['!', WARN], err: ['✕', '#e0524a'], running: ['●', ACCENT] };
+    const visibleJobs = JOBS.filter(j => {
+      if (s.jobFilter === 'Downloads') return j.type.startsWith('download');
+      if (s.jobFilter === 'Syncs') return j.type === 'add_feed' || j.type === 'scheduled_sync';
+      if (s.jobFilter === 'Verify') return j.type === 'verify';
+      if (s.jobFilter === 'Errors') return j.state === 'err' || j.state === 'warn';
+      return true;
+    }).map(j => ({ ...j, icon: jobIcon[j.state][0], color: jobIcon[j.state][1] }));
+
+    const renderTemplate = (tpl, vals) => tpl.replace(/\{(\w+)(?::[^}]*)?\}/g, (m, k) => (k in vals ? String(vals[k]) : m));
+    const sample = {
+      podcast_name: 'podcast_de_muestra', episode_title: 'Un episodio de muestra', episode_number: 7,
+      season_number: 2, year: 2024, month: '03', day: '07', date: '2024-03-07', episode_label: '007',
+    };
+
+    const dlPct = Math.round(s.dlPct);
+    const totalSec = 3862, playedSec = Math.round((s.pct / 100) * totalSec);
+    const fmt = t => `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`;
+
+    const density = this.props.density ?? 'balanced';
+
+    const TONES = {
+      ok: { color: OK, border: 'rgba(63,178,127,0.4)', icon: '✓' },
+      warn: { color: WARN, border: 'rgba(224,161,58,0.4)', icon: '!' },
+      err: { color: '#e0524a', border: 'rgba(224,82,74,0.4)', icon: '✕' },
+    };
+    const toastTone = TONES[(s.toast && s.toast.tone) || 'ok'];
+    const jobKind = s.job.kind === 'download' ? ACCENT : OK;
+    const pendingCount = p.total - p.downloaded;
+    const avgMb = 74;
+    const SPEED_LABELS = ['1.0×', '1.25×', '1.5×', '2.0×'];
+
+    return {
+      // ---- Fase 22 ----
+      jobStripVisible: s.job.active,
+      jobStrip: {
+        label: s.paused ? 'Paused' : s.job.label,
+        detail: s.job.detail,
+        pct: dlPct + '%',
+        dot: s.paused ? WARN : jobKind,
+        pulse: s.paused ? 'none' : 'pf-pulse 1.6s ease-in-out infinite',
+      },
+      cancelJob: () => {
+        this.setState({ job: { ...s.job, active: false } });
+        this.flash('Download stopped. Finished episodes are kept.', 'warn');
+      },
+      dismissJob: () => this.setState({ job: { ...s.job, active: false } }),
+
+      toastVisible: !!s.toast,
+      toast: s.toast ? { ...s.toast, ...toastTone } : {},
+      dismissToast: () => this.setState({ toast: null }),
+
+      confirmOpen: s.confirmOpen,
+      confirm: {
+        count: pendingCount,
+        size: ((pendingCount * avgMb) / 1024).toFixed(1) + ' GB',
+        time: Math.max(1, Math.round((pendingCount * avgMb) / 4.1 / 60)) + ' min',
+        folder: `downloads/${p.name}/…`,
+      },
+      askDownloadAll: () => this.setState({ confirmOpen: true }),
+      closeConfirm: () => this.setState({ confirmOpen: false }),
+      startDownloadAll: () => this.enqueue('Downloading', `${p.name} · 0 of ${pendingCount}`, `Queued ${pendingCount} episode(s) from ${p.display}.`),
+      startLatest: () => this.enqueue('Downloading', `${p.name} · latest episode`, `Queued the latest episode of ${p.display}.`),
+      startVerify: () => this.enqueue('Verifying', `${p.name} · checking files on disk`, `Verifying ${p.display} against the database.`, 'verify'),
+
+      renameDraft: s.renameDraft,
+      onRenameDraft: e => this.setState({ renameDraft: e.target.value }),
+      saveRename: () => {
+        this.setState({ renamingId: null });
+        this.flash('Renamed. Folder, filename and TIT2 tag updated.', 'ok', 'Undo', () => this.flash('Reverted to the feed title.', 'ok'));
+      },
+      cancelRename: () => this.setState({ renamingId: null }),
+
+      paused: s.paused,
+      pauseLabel: s.paused ? 'Resume queue' : 'Pause queue',
+      togglePause: () => {
+        this.setState({ paused: !s.paused });
+        this.flash(s.paused ? 'Queue resumed.' : 'Queue paused after the current episode.', 'warn');
+      },
+      cancelAll: () => {
+        this.setState({ job: { ...s.job, active: false } });
+        this.flash('Queue cleared. 17 episode(s) dropped, downloaded files untouched.', 'err');
+      },
+      goActivity: () => this.go('activity'),
+      goStorage: () => this.go('storage'),
+      cycleSpeed: () => this.setState({ speedIndex: (s.speedIndex + 1) % 4 }),
+      // ---- /Fase 22 ----
+
+      rowPad: density === 'dense' ? '6px' : density === 'roomy' ? '17px' : '11px',
+      showPath: (this.props.showPathColumn ?? true) === true,
+      showPlayer: (this.props.showPlayer ?? true) === true,
+      nav,
+      goMobile: () => this.go('mobile'),
+      mobileBg: s.screen === 'mobile' ? 'rgba(91,141,239,0.13)' : 'transparent',
+      mobileFg: s.screen === 'mobile' ? ACCENT : '#c9ced6',
+      goQueue: () => this.go('queue'),
+      goPodcast: () => this.go('podcast'),
+      screenTitle: titles[s.screen][0],
+      screenSubtitle: titles[s.screen][1],
+      query: s.query,
+      onQuery: e => this.setState({ query: e.target.value }),
+
+      isLibrary: s.screen === 'library', isPodcast: s.screen === 'podcast', isEpisode: s.screen === 'episode',
+      isQueue: s.screen === 'queue', isSchedule: s.screen === 'schedule', isActivity: s.screen === 'activity',
+      isStorage: s.screen === 'storage', isSettings: s.screen === 'settings', isMobile: s.screen === 'mobile',
+
+      libFilters,
+      visiblePodcasts: PODCASTS.filter(matches).map(decorate),
+      podcasts: PODCASTS.map((pod, i) => {
+        const c = cover(pod.hue);
+        return {
+          ...pod, cover: c,
+          autoBg: pod.auto ? ACCENT : '#252a33',
+          knobLeft: pod.auto ? '16px' : '2px',
+          knobColor: pod.auto ? '#0b0d10' : '#6b727d',
+          nextColor: pod.interval ? DIM : '#565d68',
+          intervalCells: intervalLabels.map(iv => ({ label: iv.label, ...this.pill(pod.interval === iv.h) })),
+        };
+      }),
+
+      current: { ...p, cover: cover(p.hue) },
+      epFilters, epQuery: s.epQuery,
+      onEpQuery: e => this.setState({ epQuery: e.target.value }),
+      epCountLabel: `${eps.length} shown · ${p.total} total`,
+      visibleEpisodes: eps.map(epRow),
+
+      selected: {
+        label: `episode ${String(sel.n).padStart(3, '0')} · season 4`,
+        title: sel.custom || sel.title,
+        status: sel.status, chipBg: selChip.bg, chipFg: selChip.fg,
+        custom: s.custom,
+        summary: 'Cerramos la temporada con las cintas que quedaron afuera del corte final: qué se guarda, qué se descarta y por qué el archivo siempre pesa más de lo que uno calcula.',
+        meta: [
+          { k: 'Published', v: sel.date },
+          { k: 'Duration', v: sel.duration },
+          { k: 'File size', v: sel.size },
+          { k: 'Episode / season', v: `${sel.n} / 4` },
+          { k: 'Feed GUID', v: 'a4f1c9e2-77b3' },
+          { k: 'ID3 tags', v: 'complete' },
+          { k: 'Status', v: sel.status },
+        ],
+      },
+      onCustom: e => this.setState({ custom: e.target.value }),
+      playSelected: () => this.setState({ playing: true }),
+
+      active: {
+        title: 'Archivos que nadie volvió a abrir', podcast: 'the_long_view', label: '213',
+        pct: dlPct + '%', mb: `${(63.4 * dlPct / 100).toFixed(1)} / 63.4 MB`,
+        speed: '4.1 MB/s', eta: '00:14', job: '#a91f', step: 'writing ID3 tags next',
+      },
+      upNext: [
+        { pos: '01', title: 'Una hora con el archivista', podcast: 'the_long_view', size: '88.9 MB', wait: 'next' },
+        { pos: '02', title: 'El costo de guardar todo', podcast: 'the_long_view', size: '54.2 MB', wait: '~1 min' },
+        { pos: '03', title: 'Temporada 4, cierre', podcast: 'the_long_view', size: '102.4 MB', wait: '~2 min' },
+        { pos: '04', title: 'Sobremesa con el vecino del 3B', podcast: 'cocina_de_barrio', size: '41.8 MB', wait: '~3 min' },
+        { pos: '05', title: 'Ruido de fondo, tomas descartadas', podcast: 'signal_and_static', size: '67.1 MB', wait: '~4 min' },
+      ].filter(q => !s.removed.includes(q.pos)).map(q => ({
+        ...q,
+        remove: () => {
+          this.setState(st => ({ removed: [...st.removed, q.pos] }));
+          this.flash(`Removed “${q.title}” from the queue.`, 'warn', 'Undo', () => this.setState(st => ({ removed: st.removed.filter(r => r !== q.pos) })));
+        },
+      })),
+      finished: [
+        { icon: '✓', color: OK, title: 'Cintas prestadas, parte dos', podcast: 'the_long_view', size: '71.0 MB', time: '13:44' },
+        { icon: '✓', color: OK, title: 'Field Notes 46 — cierre de mes', podcast: 'field_notes_semanal', size: '58.3 MB', time: '12:02' },
+        { icon: '✕', color: '#e0524a', title: 'Sopa de domingo (HTTP 403)', podcast: 'cocina_de_barrio', size: '—', time: '07:30' },
+      ],
+
+      jobFilters, visibleJobs,
+
+      storageRows: [
+        { name: 'The Long View', size: '46.1 GB', pct: '100%' },
+        { name: 'Historia en Cinta', size: '38.4 GB', pct: '83%' },
+        { name: 'After Hours Build', size: '22.9 GB', pct: '50%' },
+        { name: 'Cocina de Barrio', size: '19.6 GB', pct: '43%' },
+        { name: 'Signal & Static', size: '17.2 GB', pct: '37%' },
+        { name: 'Martes de Archivo', size: '13.7 GB', pct: '30%' },
+      ],
+
+      folderTemplate: s.folderTemplate,
+      filenameTemplate: s.filenameTemplate,
+      onFolder: e => this.setState({ folderTemplate: e.target.value }),
+      onFilename: e => this.setState({ filenameTemplate: e.target.value }),
+      previewFolder: renderTemplate(s.folderTemplate, sample),
+      previewFile: renderTemplate(s.filenameTemplate, sample),
+      variables: ['podcast_name', 'episode_title', 'episode_number', 'season_number', 'year', 'month', 'day', 'date', 'episode_label'].map(v => ({
+        token: '{' + v + '}',
+        insert: () => this.setState(st => ({ folderTemplate: st.folderTemplate + '{' + v + '}' })),
+      })),
+      envRows: [
+        { k: 'PODCAST_DB_PATH', v: '/app/data/podcast_data.db' },
+        { k: 'PODCAST_DOWNLOADS_FOLDER', v: '/app/data/downloads' },
+        { k: 'PODCAST_FEEDS_FILE', v: '/app/data/feeds.txt' },
+        { k: 'PODCAST_LOG_LEVEL', v: 'INFO' },
+        { k: 'PODCAST_SCHEDULER_POLL_INTERVAL_SECONDS', v: '300' },
+        { k: 'DEFAULT_DELAY_SECONDS', v: '5' },
+      ],
+
+      mobileTiles: PODCASTS.slice(0, 4).map(decorate),
+      nowPlaying: { title: EPISODES[s.selected].custom || EPISODES[s.selected].title, podcast: p.name },
+      playing: s.playing,
+      playGlyph: s.playing ? '⏸' : '▶',
+      playLabel: s.playing ? 'Pause' : 'Play',
+      togglePlay: () => this.setState(st => ({ playing: !st.playing })),
+      playedPct: s.pct.toFixed(1) + '%',
+      elapsed: fmt(playedSec),
+      remaining: '-' + fmt(totalSec - playedSec),
+      speed: SPEED_LABELS[s.speedIndex],
+      seek: e => {
+        const r = e.currentTarget.getBoundingClientRect();
+        this.setState({ pct: Math.max(0, Math.min(100, ((e.clientX - r.left) / r.width) * 100)) });
+      },
+    };
+  }
+}
+
+</script>
+</body>
+</html>

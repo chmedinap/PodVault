@@ -1,0 +1,583 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}PodVault{% endblock %}</title>
+<style>
+  @font-face { font-family:'IBM Plex Sans'; src:url('/static/fonts/IBMPlexSans-400.woff2') format('woff2'); font-weight:400; font-style:normal; font-display:swap; }
+  @font-face { font-family:'IBM Plex Sans'; src:url('/static/fonts/IBMPlexSans-500.woff2') format('woff2'); font-weight:500; font-style:normal; font-display:swap; }
+  @font-face { font-family:'IBM Plex Sans'; src:url('/static/fonts/IBMPlexSans-600.woff2') format('woff2'); font-weight:600; font-style:normal; font-display:swap; }
+  @font-face { font-family:'IBM Plex Sans'; src:url('/static/fonts/IBMPlexSans-700.woff2') format('woff2'); font-weight:700; font-style:normal; font-display:swap; }
+  @font-face { font-family:'IBM Plex Mono'; src:url('/static/fonts/IBMPlexMono-400.woff2') format('woff2'); font-weight:400; font-style:normal; font-display:swap; }
+  @font-face { font-family:'IBM Plex Mono'; src:url('/static/fonts/IBMPlexMono-500.woff2') format('woff2'); font-weight:500; font-style:normal; font-display:swap; }
+  @font-face { font-family:'IBM Plex Mono'; src:url('/static/fonts/IBMPlexMono-600.woff2') format('woff2'); font-weight:600; font-style:normal; font-display:swap; }
+
+  :root {
+    --bg:#0b0d10; --panel:#14171c; --panel-2:#0e1116; --row-hover:#12151b;
+    --border:#1f242c; --border-strong:#262b35;
+    --text:#e9ebee; --muted:#9aa1ab; --dim:#6b727d; --faint:#565d68;
+    --accent:#5b8def; --accent-hover:#7aa4f5; --accent-bg:rgba(91,141,239,0.14); --accent-border:rgba(91,141,239,0.45);
+    --ok:#3fb27f; --ok-bg:rgba(63,178,127,0.14);
+    --warn:#e0a13a; --warn-bg:rgba(224,161,58,0.14);
+    --err:#e0524a; --err-bg:rgba(224,82,74,0.14);
+    --purple:#8b7cf0; --purple-bg:rgba(139,124,240,0.14);
+    --input-bg:#0d1014; --code-bg:#161a21;
+    --sidebar-width:236px;
+  }
+  * { box-sizing:border-box; }
+  body {
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:'IBM Plex Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+  a { color:var(--accent); text-decoration:none; }
+  a:hover { color:var(--accent-hover); }
+  ::-webkit-scrollbar { width:10px; height:10px; }
+  ::-webkit-scrollbar-thumb { background:var(--border-strong); border-radius:99px; }
+  ::-webkit-scrollbar-track { background:transparent; }
+  .mono, code, .stat-value, .chip, input.mono { font-family:'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  code { background:var(--code-bg); border:1px solid var(--border-strong); border-radius:4px; padding:0.1rem 0.4rem; font-size:0.82rem; }
+
+  /* ---------- shell ---------- */
+  .app-shell { display:flex; align-items:stretch; min-height:100vh; }
+  .sidebar {
+    width:var(--sidebar-width); flex-shrink:0; border-right:1px solid var(--border);
+    background:var(--panel-2); display:flex; flex-direction:column; min-height:100vh;
+    position:sticky; top:0; align-self:flex-start; height:100vh; overflow-y:auto; z-index:20;
+  }
+  .sidebar-brand { padding:20px 18px 16px 18px; display:flex; align-items:center; gap:10px; color:var(--text); }
+  .brand-mark {
+    width:28px; height:28px; border-radius:8px; background:var(--accent); flex-shrink:0;
+    display:flex; align-items:center; justify-content:center; color:var(--bg);
+    font-weight:700; font-size:14px; font-family:'IBM Plex Mono', monospace;
+  }
+  .brand-name { font-size:14px; font-weight:600; letter-spacing:-0.01em; }
+  .brand-sub { font-size:11px; color:var(--faint); font-family:'IBM Plex Mono', monospace; }
+  .sidebar-nav { padding:6px 10px; display:flex; flex-direction:column; gap:2px; }
+  .nav-item {
+    display:flex; align-items:center; gap:10px; padding:8px 10px; border-radius:8px;
+    font-size:13.5px; font-weight:500; color:#c9ced6;
+  }
+  .nav-item:hover { background:#171b22; color:#c9ced6; }
+  .nav-item-active, .nav-item-active:hover { background:var(--accent-bg); color:var(--accent); }
+  .nav-glyph { width:16px; text-align:center; font-size:13px; opacity:0.9; flex-shrink:0; }
+  .nav-label { flex:1; min-width:0; }
+  .sidebar-spacer { flex:1; }
+  .sidebar-footer { padding:6px 20px 16px 20px; font-size:11px; color:var(--faint); font-family:'IBM Plex Mono', monospace; }
+  .sidebar-backdrop { display:none; }
+
+  .main-area { flex:1; min-width:0; display:flex; flex-direction:column; min-height:100vh; }
+  .topbar {
+    height:60px; flex-shrink:0; border-bottom:1px solid var(--border);
+    background:rgba(11,13,16,0.92); backdrop-filter:blur(8px);
+    display:flex; align-items:center; gap:14px; padding:0 24px;
+    position:sticky; top:0; z-index:5;
+  }
+  .sidebar-toggle { display:none; background:transparent; border:1px solid var(--border-strong); color:var(--text); width:34px; height:34px; border-radius:8px; font-size:14px; cursor:pointer; flex-shrink:0; }
+  .topbar-titles { display:flex; align-items:center; gap:8px; min-width:0; }
+  .topbar-title { font-size:15px; font-weight:600; letter-spacing:-0.01em; white-space:nowrap; }
+  .topbar-subtitle { font-size:12.5px; color:var(--dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .topbar-spacer { flex:1; }
+  .topbar-search { display:flex; align-items:center; gap:8px; background:var(--panel); border:1px solid var(--border-strong); border-radius:8px; padding:7px 10px; width:280px; max-width:34vw; }
+  .topbar-search input { flex:1; min-width:0; background:transparent; border:none; outline:none; color:var(--text); font-size:13px; font-family:inherit; }
+  .topbar-search-icon { color:var(--dim); font-size:12px; }
+  .main-content { flex:1; min-width:0; padding:24px 24px 132px 24px; max-width:1320px; }
+
+  /* ---------- buttons ---------- */
+  button, .btn {
+    display:inline-flex; align-items:center; gap:7px; background:var(--accent); color:#0a0c10;
+    padding:9px 15px; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer;
+    border:none; white-space:nowrap; font-family:inherit;
+  }
+  button:hover, .btn:hover { background:var(--accent-hover); color:#0a0c10; }
+  button.secondary, .btn-secondary {
+    background:transparent; border:1px solid var(--border-strong); color:var(--text); font-weight:500;
+  }
+  button.secondary:hover, .btn-secondary:hover { background:#171b22; color:var(--text); }
+  button.danger, .btn-danger { border:1px solid rgba(224,82,74,0.4); background:transparent; color:var(--err); font-weight:500; }
+  button.danger:hover, .btn-danger:hover { background:rgba(224,82,74,0.1); }
+  .btn-sm { padding:6px 12px; font-size:12.5px; }
+
+  /* ---------- layout helpers ---------- */
+  .card { background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:1.25rem; margin-bottom:1.25rem; }
+  h2 { font-size:1.05rem; }
+  .row { display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap; }
+  .between { justify-content:space-between; }
+  .muted { color:var(--dim); font-size:0.85rem; }
+  form.inline { display:inline-flex; }
+  .ellipsis { max-width:260px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+  table { width:100%; border-collapse:collapse; }
+  th, td { text-align:left; padding:0.55rem 0.6rem; border-bottom:1px solid var(--border); font-size:0.9rem; vertical-align:top; }
+  th { color:var(--dim); font-weight:600; font-size:0.75rem; text-transform:uppercase; letter-spacing:0.04em; }
+
+  input[type=text], input[type=url], input[type=search], select {
+    background:var(--input-bg); border:1px solid var(--border-strong); color:var(--text);
+    padding:0.5rem 0.7rem; border-radius:6px; font-size:0.88rem; font-family:inherit;
+  }
+
+  .badge { display:inline-block; padding:0.15rem 0.55rem; border-radius:999px; font-size:0.72rem; font-weight:600; white-space:nowrap; }
+  .badge-downloaded { background:var(--ok-bg); color:var(--ok); }
+  .badge-missing { background:var(--warn-bg); color:var(--warn); }
+  .badge-pending { background:rgba(154,161,171,0.13); color:var(--muted); }
+
+  .flash { padding:0.7rem 1rem; border-radius:8px; margin-bottom:1.25rem; font-size:0.9rem; }
+  .flash-ok { background:var(--ok-bg); color:var(--ok); border:1px solid rgba(63,178,127,0.3); }
+  .flash-err { background:var(--err-bg); color:var(--err); border:1px solid rgba(224,82,74,0.3); }
+
+  .progress { height:10px; background:var(--input-bg); border-radius:999px; overflow:hidden; border:1px solid var(--border-strong); }
+  .progress-bar { height:100%; background:var(--accent); transition:width 0.3s ease; width:0%; }
+
+  /* ---------- reusable design-system pieces (Fase 10) ---------- */
+  .grid-stats { display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:12px; }
+  .grid-cards { display:grid; grid-template-columns:repeat(auto-fill, minmax(224px, 1fr)); gap:18px; }
+  .stat-card { background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:16px; }
+  .stat-label { font-size:11.5px; letter-spacing:0.06em; text-transform:uppercase; color:var(--dim); font-weight:600; }
+  .stat-value { font-size:26px; margin-top:6px; letter-spacing:-0.02em; display:block; }
+  .stat-value-ok { color:var(--ok); } .stat-value-warn { color:var(--warn); } .stat-value-accent { color:var(--accent); }
+  .stat-hint { font-size:12px; color:var(--dim); margin-top:2px; }
+
+  .pill { padding:6px 12px; border-radius:99px; font-size:12.5px; font-weight:500; cursor:pointer; border:1px solid var(--border-strong); background:transparent; color:var(--dim); display:inline-block; }
+  .pill:hover { color:var(--text); }
+  .pill-active, .pill-active:hover { background:var(--accent-bg); color:var(--accent); border-color:var(--accent-border); }
+
+  .chip { display:inline-flex; align-items:center; gap:6px; padding:3px 9px; border-radius:99px; font-size:11.5px; font-weight:600; }
+  .chip-dot { width:5px; height:5px; border-radius:99px; background:currentColor; flex-shrink:0; }
+  .chip-ok { background:var(--ok-bg); color:var(--ok); }
+  .chip-warn { background:var(--warn-bg); color:var(--warn); }
+  .chip-dim { background:rgba(154,161,171,0.13); color:var(--muted); }
+  .chip-err { background:var(--err-bg); color:var(--err); }
+  .chip-accent { background:var(--accent-bg); color:var(--accent); }
+  .chip-purple { background:var(--purple-bg); color:var(--purple); }
+
+  .toggle { position:relative; display:inline-block; width:34px; height:20px; flex-shrink:0; }
+  .toggle input { opacity:0; width:0; height:0; position:absolute; }
+  .toggle-track { position:absolute; inset:0; background:var(--border-strong); border-radius:99px; cursor:pointer; transition:background 0.15s ease; }
+  .toggle-track::before { content:''; position:absolute; top:2px; left:2px; width:16px; height:16px; border-radius:99px; background:var(--dim); transition:transform 0.15s ease, background 0.15s ease; }
+  .toggle input:checked + .toggle-track { background:var(--accent); }
+  .toggle input:checked + .toggle-track::before { transform:translateX(14px); background:var(--bg); }
+
+  .pill-radio { display:none; }
+  .pill-radio-label {
+    padding:6px 4px; border-radius:7px; font-family:'IBM Plex Mono', monospace; font-size:11.5px;
+    cursor:pointer; border:1px solid var(--border-strong); color:var(--dim); text-align:center; flex:1;
+  }
+  .pill-radio:checked + .pill-radio-label { background:var(--accent-bg); color:var(--accent); border-color:var(--accent-border); }
+
+  .cover-placeholder {
+    display:flex; align-items:center; justify-content:center;
+    font-family:'IBM Plex Mono', monospace; font-size:10.5px; letter-spacing:0.08em;
+    color:rgba(255,255,255,0.5); text-transform:uppercase; border:1px solid var(--border-strong); border-radius:12px;
+  }
+
+  /* ---------- player bar (shared across every page) ---------- */
+  .player-bar {
+    position:fixed; left:var(--sidebar-width); right:0; bottom:0; z-index:8;
+    background:rgba(16,19,24,0.97); backdrop-filter:blur(10px); border-top:1px solid var(--border-strong);
+    padding:12px 20px; display:flex; align-items:center; gap:16px;
+  }
+  .player-cover { width:48px; height:48px; border-radius:9px; border:1px solid #2b313c; object-fit:cover; background:var(--input-bg); flex-shrink:0; }
+  .player-info { min-width:0; max-width:240px; flex-shrink:0; }
+  .player-title { font-size:12.5px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .player-podcast { font-family:'IBM Plex Mono', monospace; font-size:11px; color:var(--dim); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .player-ctl {
+    background:transparent; border:none; padding:0; margin:0; border-radius:0;
+    color:var(--muted); font-size:13px; cursor:pointer; user-select:none; font-family:inherit;
+  }
+  .player-ctl:hover { color:var(--text); background:transparent; }
+  .player-play-btn {
+    width:34px; height:34px; border-radius:99px; background:var(--accent); color:#0a0c10;
+    display:flex; align-items:center; justify-content:center; font-size:13px; cursor:pointer;
+    flex-shrink:0; border:none; padding:0;
+  }
+  .player-play-btn:hover { background:var(--accent-hover); color:#0a0c10; }
+  .player-time { font-family:'IBM Plex Mono', monospace; font-size:11px; color:var(--dim); width:40px; flex-shrink:0; }
+  #player-elapsed { text-align:right; }
+  .player-seek { flex:1; height:4px; border-radius:99px; background:#252a33; position:relative; cursor:pointer; }
+  .player-seek-fill { position:absolute; left:0; top:0; bottom:0; border-radius:99px; background:var(--accent); width:0%; pointer-events:none; }
+  .player-seek-knob { position:absolute; top:-4px; left:0%; width:12px; height:12px; margin-left:-6px; border-radius:99px; background:var(--text); border:2px solid #101318; pointer-events:none; }
+  .player-speed { border:1px solid var(--border-strong); border-radius:6px; padding:4px 8px; font-family:'IBM Plex Mono', monospace; }
+
+  /* ---------- accessibility: visible keyboard focus everywhere (Fase 22) ---------- */
+  button:focus-visible, .btn:focus-visible, .pill:focus-visible, .nav-item:focus-visible,
+  a:focus-visible, .player-ctl:focus-visible, .player-play-btn:focus-visible {
+    outline:2px solid var(--accent); outline-offset:2px;
+  }
+
+  /* ---------- toast + job strip (Fase 22): replaces the old /jobs/{id} interstitial ---------- */
+  .toast, .job-strip {
+    position:fixed; right:24px; z-index:30; display:flex; align-items:center; gap:10px;
+    background:var(--panel); border:1px solid var(--border-strong); border-radius:10px;
+    padding:11px 14px; box-shadow:0 10px 28px rgba(0,0,0,0.4); max-width:380px; font-size:13px;
+  }
+  .toast { bottom:96px; }
+  .job-strip { bottom:156px; min-width:280px; }
+  .toast-icon { font-size:13px; flex-shrink:0; }
+  .toast-ok .toast-icon { color:var(--ok); }
+  .toast-err .toast-icon { color:var(--err); }
+  .toast-info .toast-icon { color:var(--accent); }
+  .toast-message { flex:1; min-width:0; }
+  .toast-action { font-weight:600; white-space:nowrap; }
+  .toast-dismiss, .job-strip-dismiss {
+    background:transparent; border:none; color:var(--dim); cursor:pointer; padding:2px; font-size:12px; flex-shrink:0;
+  }
+  .toast-dismiss:hover, .job-strip-dismiss:hover { color:var(--text); background:transparent; }
+  .job-strip-dot { width:8px; height:8px; border-radius:99px; background:var(--accent); flex-shrink:0; }
+  .job-strip-dot.pulse { animation:pf-pulse 1.2s ease-in-out infinite; }
+  @keyframes pf-pulse { 0%, 100% { opacity:1; } 50% { opacity:0.35; } }
+  .job-strip-text { flex:1; min-width:0; }
+  .job-strip-label { font-weight:600; text-transform:capitalize; }
+  .job-strip-detail {
+    font-size:11.5px; color:var(--dim); font-family:'IBM Plex Mono', monospace;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  }
+  .job-strip-progress { width:64px; height:6px; flex-shrink:0; }
+
+  @media (max-width: 860px) {
+    .toast, .job-strip { left:16px; right:16px; max-width:none; }
+    .sidebar { position:fixed; top:0; left:0; transform:translateX(-100%); transition:transform 0.18s ease; }
+    .sidebar.sidebar-open { transform:translateX(0); }
+    .sidebar-backdrop { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:15; }
+    .sidebar-backdrop.sidebar-open { display:block; }
+    .sidebar-toggle { display:inline-flex; align-items:center; justify-content:center; }
+    .topbar-search { display:none; }
+    .player-bar { left:0; }
+    .grid-cards { grid-template-columns:repeat(2, 1fr); gap:12px; }
+    .main-content { padding:16px 16px 132px 16px; }
+  }
+</style>
+{% block extra_head %}{% endblock %}
+</head>
+<body>
+{% set current_nav = active_nav|default('') %}
+<div class="app-shell">
+  <div class="sidebar-backdrop" id="sidebar-backdrop"></div>
+  <div class="sidebar" id="sidebar">
+    <a href="/" class="sidebar-brand">
+      <div class="brand-mark">P</div>
+      <div>
+        <div class="brand-name">PodVault</div>
+        <div class="brand-sub">v{{ app_version }}</div>
+      </div>
+    </a>
+    <div class="sidebar-nav">
+      <a href="/" class="nav-item {{ 'nav-item-active' if current_nav == 'library' else '' }}">
+        <span class="nav-glyph">▦</span><span class="nav-label">Library</span>
+      </a>
+      <a href="/queue" class="nav-item {{ 'nav-item-active' if current_nav == 'queue' else '' }}">
+        <span class="nav-glyph">↓</span><span class="nav-label">Queue</span>
+      </a>
+      <a href="/schedule" class="nav-item {{ 'nav-item-active' if current_nav == 'schedule' else '' }}">
+        <span class="nav-glyph">◴</span><span class="nav-label">Schedule</span>
+      </a>
+      <a href="/activity" class="nav-item {{ 'nav-item-active' if current_nav == 'activity' else '' }}">
+        <span class="nav-glyph">◷</span><span class="nav-label">Activity</span>
+      </a>
+      <a href="/storage" class="nav-item {{ 'nav-item-active' if current_nav == 'storage' else '' }}">
+        <span class="nav-glyph">▤</span><span class="nav-label">Storage</span>
+      </a>
+      <a href="/settings" class="nav-item {{ 'nav-item-active' if current_nav == 'settings' else '' }}">
+        <span class="nav-glyph">⚙</span><span class="nav-label">Settings</span>
+      </a>
+    </div>
+    <div class="sidebar-spacer"></div>
+    <div class="sidebar-footer">v{{ app_version }}</div>
+  </div>
+
+  <div class="main-area">
+    <div class="topbar">
+      <button type="button" class="sidebar-toggle" id="sidebar-toggle" aria-label="Menu">☰</button>
+      <div class="topbar-titles">
+        <span class="topbar-title">{% block topbar_title %}PodVault{% endblock %}</span>
+        <span class="topbar-subtitle">{% block topbar_subtitle %}{% endblock %}</span>
+      </div>
+      <div class="topbar-spacer"></div>
+      <form class="topbar-search" action="/" method="get">
+        <span class="topbar-search-icon">⌕</span>
+        <input type="search" name="q" placeholder="Search podcasts" value="{{ query or '' }}">
+      </form>
+      <a href="/#add-podcast" class="btn">+ Add podcast</a>
+    </div>
+
+    <div class="main-content">
+      {% block content %}{% endblock %}
+    </div>
+  </div>
+</div>
+
+<div id="player-bar" class="player-bar" style="display:none;">
+  <div class="row" style="gap:12px; width:260px; min-width:0; flex-shrink:0;">
+    <img id="player-cover" class="player-cover" alt="">
+    <div class="player-info">
+      <div id="player-title" class="player-title"></div>
+      <div id="player-podcast" class="player-podcast"></div>
+    </div>
+  </div>
+  <div style="flex:1; min-width:0; display:flex; flex-direction:column; gap:7px; align-items:center;">
+    <div class="row" style="gap:14px;">
+      <button type="button" id="player-prev" class="player-ctl" aria-label="Previous episode" title="Previous episode">⏮</button>
+      <button type="button" id="player-back15" class="player-ctl mono" aria-label="Back 15 seconds" title="Back 15 seconds">−15</button>
+      <button type="button" id="player-toggle" class="player-play-btn" aria-label="Play or pause">▶</button>
+      <button type="button" id="player-fwd30" class="player-ctl mono" aria-label="Forward 30 seconds" title="Forward 30 seconds">+30</button>
+      <button type="button" id="player-next" class="player-ctl" aria-label="Next episode" title="Next episode">⏭</button>
+    </div>
+    <div style="width:100%; max-width:620px; display:flex; align-items:center; gap:10px;">
+      <span id="player-elapsed" class="player-time">0:00</span>
+      <div id="player-seek" class="player-seek">
+        <div id="player-seek-fill" class="player-seek-fill"></div>
+        <div id="player-seek-knob" class="player-seek-knob"></div>
+      </div>
+      <span id="player-remaining" class="player-time">-0:00</span>
+    </div>
+  </div>
+  <div class="row" style="gap:12px; flex-shrink:0;">
+    <button type="button" id="player-speed" class="player-ctl player-speed" aria-label="Playback speed">1.0×</button>
+  </div>
+  <audio id="player-audio"></audio>
+</div>
+
+<div id="toast" class="toast" style="display:none;" role="status">
+  <span id="toast-icon" class="toast-icon"></span>
+  <span id="toast-message" class="toast-message"></span>
+  <a id="toast-action" class="toast-action" style="display:none;"></a>
+  <button type="button" id="toast-dismiss" class="toast-dismiss" aria-label="Dismiss notification">✕</button>
+</div>
+
+<div id="job-strip" class="job-strip" style="display:none;" role="status">
+  <span id="job-strip-dot" class="job-strip-dot"></span>
+  <div class="job-strip-text">
+    <div id="job-strip-label" class="job-strip-label"></div>
+    <div id="job-strip-detail" class="job-strip-detail"></div>
+  </div>
+  <div class="progress job-strip-progress"><div id="job-strip-bar" class="progress-bar"></div></div>
+  <a href="/queue" class="btn btn-secondary btn-sm">View queue</a>
+  <button type="button" id="job-strip-cancel" class="btn danger btn-sm" aria-label="Cancel this download">Cancel</button>
+  <button type="button" id="job-strip-dismiss" class="job-strip-dismiss" aria-label="Dismiss">✕</button>
+</div>
+
+<script>
+(function () {
+  const sidebar = document.getElementById('sidebar');
+  const backdrop = document.getElementById('sidebar-backdrop');
+  const toggle = document.getElementById('sidebar-toggle');
+  function closeSidebar() {
+    sidebar.classList.remove('sidebar-open');
+    backdrop.classList.remove('sidebar-open');
+  }
+  if (toggle) {
+    toggle.addEventListener('click', function () {
+      sidebar.classList.toggle('sidebar-open');
+      backdrop.classList.toggle('sidebar-open');
+    });
+  }
+  backdrop.addEventListener('click', closeSidebar);
+})();
+
+const playerBar = document.getElementById('player-bar');
+const playerAudio = document.getElementById('player-audio');
+const playerCover = document.getElementById('player-cover');
+const playerTitle = document.getElementById('player-title');
+const playerPodcast = document.getElementById('player-podcast');
+const playerToggle = document.getElementById('player-toggle');
+const playerSeek = document.getElementById('player-seek');
+const playerSeekFill = document.getElementById('player-seek-fill');
+const playerSeekKnob = document.getElementById('player-seek-knob');
+const playerElapsed = document.getElementById('player-elapsed');
+const playerRemaining = document.getElementById('player-remaining');
+const playerSpeed = document.getElementById('player-speed');
+const playerPrev = document.getElementById('player-prev');
+const playerNext = document.getElementById('player-next');
+const playerBack15 = document.getElementById('player-back15');
+const playerFwd30 = document.getElementById('player-fwd30');
+
+// No cross-navigation persistence: this app is a full-page-reload, no-SPA
+// design (see ROADMAP.md) — the <audio> element (and this state) is
+// destroyed on every navigation, by design, not as a bug to fix.
+let pfCurrentPodcast = null;
+let pfCurrentEpisodeId = null;
+const PF_SPEEDS = [1, 1.25, 1.5, 2];
+const PF_SPEED_LABELS = ['1.0×', '1.25×', '1.5×', '2.0×'];
+let pfSpeedIndex = 0;
+
+function pfFormatTime(seconds) {
+  if (!isFinite(seconds) || seconds < 0) seconds = 0;
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+function pfPlayEpisode(podcast, episode, title) {
+  pfCurrentPodcast = podcast;
+  pfCurrentEpisodeId = episode;
+  playerAudio.src = `/podcasts/${encodeURIComponent(podcast)}/episodes/${encodeURIComponent(episode)}/audio`;
+  playerCover.src = `/podcasts/${encodeURIComponent(podcast)}/episodes/${encodeURIComponent(episode)}/cover`;
+  playerCover.style.display = '';
+  playerCover.onerror = function () { playerCover.style.display = 'none'; };
+  playerTitle.textContent = title;
+  playerPodcast.textContent = podcast;
+  playerBar.style.display = 'flex';
+  playerAudio.playbackRate = PF_SPEEDS[pfSpeedIndex];
+  playerAudio.play();
+}
+
+function pfPlayRelative(offset) {
+  const list = window.PF_EPISODE_LIST || [];
+  const idx = list.findIndex(function (e) { return e.id === pfCurrentEpisodeId; });
+  if (idx === -1) return;
+  const target = list[idx + offset];
+  if (!target) return;
+  pfPlayEpisode(pfCurrentPodcast, target.id, target.title);
+}
+
+document.addEventListener('click', function (event) {
+  const button = event.target.closest('.play-button');
+  if (!button) return;
+  pfPlayEpisode(button.dataset.podcast, button.dataset.episode, button.dataset.title);
+});
+
+playerToggle.addEventListener('click', function () {
+  if (playerAudio.paused) playerAudio.play(); else playerAudio.pause();
+});
+playerAudio.addEventListener('play', function () { playerToggle.textContent = '⏸'; });
+playerAudio.addEventListener('pause', function () { playerToggle.textContent = '▶'; });
+
+playerBack15.addEventListener('click', function () {
+  playerAudio.currentTime = Math.max(0, playerAudio.currentTime - 15);
+});
+playerFwd30.addEventListener('click', function () {
+  playerAudio.currentTime = Math.min(playerAudio.duration || Infinity, playerAudio.currentTime + 30);
+});
+playerPrev.addEventListener('click', function () { pfPlayRelative(-1); });
+playerNext.addEventListener('click', function () { pfPlayRelative(1); });
+
+playerSpeed.addEventListener('click', function () {
+  pfSpeedIndex = (pfSpeedIndex + 1) % PF_SPEEDS.length;
+  playerAudio.playbackRate = PF_SPEEDS[pfSpeedIndex];
+  playerSpeed.textContent = PF_SPEED_LABELS[pfSpeedIndex];
+});
+
+function pfUpdateSeek() {
+  if (!playerAudio.duration || isNaN(playerAudio.duration)) return;
+  const pct = (playerAudio.currentTime / playerAudio.duration) * 100;
+  playerSeekFill.style.width = pct + '%';
+  playerSeekKnob.style.left = pct + '%';
+  playerElapsed.textContent = pfFormatTime(playerAudio.currentTime);
+  playerRemaining.textContent = '-' + pfFormatTime(playerAudio.duration - playerAudio.currentTime);
+}
+playerAudio.addEventListener('timeupdate', pfUpdateSeek);
+playerAudio.addEventListener('loadedmetadata', pfUpdateSeek);
+
+playerSeek.addEventListener('click', function (event) {
+  if (!playerAudio.duration) return;
+  const rect = playerSeek.getBoundingClientRect();
+  const ratio = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
+  playerAudio.currentTime = ratio * playerAudio.duration;
+});
+
+// ---------- toast + job strip (Fase 22) ----------
+// Entirely client-side: a redirect appends msg/ok/tone/job_id/action_label/
+// action_url to the query string, this script reads them once and cleans the
+// URL, then polls /jobs/{id}/status (or /jobs/active/status when no job_id
+// is known, so the strip survives navigating to a different page) instead of
+// the old full-page /jobs/{id} interstitial.
+(function () {
+  const params = new URLSearchParams(window.location.search);
+  const toast = document.getElementById('toast');
+  const toastIcon = document.getElementById('toast-icon');
+  const toastMessage = document.getElementById('toast-message');
+  const toastAction = document.getElementById('toast-action');
+  const toastDismiss = document.getElementById('toast-dismiss');
+  let toastTimer = null;
+
+  function showToast(message, tone, actionLabel, actionUrl) {
+    toastMessage.textContent = message;
+    toast.className = 'toast toast-' + (tone || 'info');
+    toastIcon.textContent = tone === 'err' ? '✕' : (tone === 'ok' ? '✓' : 'ℹ');
+    if (actionLabel && actionUrl) {
+      toastAction.textContent = actionLabel;
+      toastAction.href = actionUrl;
+      toastAction.style.display = '';
+    } else {
+      toastAction.style.display = 'none';
+    }
+    toast.style.display = 'flex';
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { toast.style.display = 'none'; }, 6000);
+  }
+  toastDismiss.addEventListener('click', function () {
+    clearTimeout(toastTimer);
+    toast.style.display = 'none';
+  });
+
+  const msg = params.get('msg');
+  let activeJobId = params.get('job_id') || null;
+  if (msg) {
+    const ok = params.get('ok');
+    const tone = params.get('tone') || (ok === '1' ? 'ok' : (ok === '0' ? 'err' : 'info'));
+    showToast(msg, tone, params.get('action_label'), params.get('action_url'));
+    ['msg', 'ok', 'tone', 'job_id', 'action_label', 'action_url'].forEach(function (key) { params.delete(key); });
+    const cleanQuery = params.toString();
+    window.history.replaceState({}, '', window.location.pathname + (cleanQuery ? '?' + cleanQuery : ''));
+  }
+
+  const jobStrip = document.getElementById('job-strip');
+  const jobStripDot = document.getElementById('job-strip-dot');
+  const jobStripLabel = document.getElementById('job-strip-label');
+  const jobStripDetail = document.getElementById('job-strip-detail');
+  const jobStripBar = document.getElementById('job-strip-bar');
+  const jobStripCancel = document.getElementById('job-strip-cancel');
+  const jobStripDismiss = document.getElementById('job-strip-dismiss');
+  let jobStripDismissed = false;
+  let lastKnownStatus = null;
+
+  function renderJob(job) {
+    if (!job) {
+      jobStrip.style.display = 'none';
+      lastKnownStatus = null;
+      return;
+    }
+    activeJobId = job.id;
+    if (job.status === 'success' || job.status === 'failed') {
+      if (lastKnownStatus === 'running' || lastKnownStatus === 'pending') {
+        showToast(
+          job.status === 'success' ? (job.message || 'Job finished.') : ('Job failed: ' + (job.error || 'unknown error')),
+          job.status === 'success' ? 'ok' : 'err',
+        );
+      }
+      lastKnownStatus = job.status;
+      activeJobId = null;
+      jobStrip.style.display = 'none';
+      return;
+    }
+    lastKnownStatus = job.status;
+    if (jobStripDismissed) return;
+    const pct = job.total ? Math.round((job.progress / job.total) * 100) : 0;
+    jobStripLabel.textContent = job.job_type.replace(/_/g, ' ');
+    jobStripDetail.textContent = job.message || job.podcast_name || '';
+    jobStripBar.style.width = pct + '%';
+    jobStripDot.classList.toggle('pulse', job.status === 'running');
+    jobStrip.style.display = 'flex';
+  }
+
+  function pollJob() {
+    if (jobStripDismissed) return;
+    const url = activeJobId ? '/jobs/' + activeJobId + '/status' : '/jobs/active/status';
+    fetch(url).then(function (r) { return r.ok ? r.json() : null; }).then(renderJob).catch(function () {});
+  }
+
+  jobStripCancel.addEventListener('click', function () {
+    if (!activeJobId) return;
+    fetch('/jobs/' + activeJobId + '/cancel', { method: 'POST' }).then(pollJob);
+  });
+  jobStripDismiss.addEventListener('click', function () {
+    jobStripDismissed = true;
+    jobStrip.style.display = 'none';
+  });
+
+  pollJob();
+  setInterval(pollJob, 2000);
+})();
+</script>
+{% block extra_scripts %}{% endblock %}
+</body>
+</html>

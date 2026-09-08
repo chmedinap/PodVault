@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% block title %}Library - PodVault{% endblock %}
+{% block topbar_title %}Library{% endblock %}
+{% block topbar_subtitle %}{{ result.podcasts|length }} podcast(s) · {{ result.total_episode_count }} episode(s){% endblock %}
+{% block content %}
+
+<div class="card" id="add-podcast">
+  <h2 style="margin-top:0">Add podcast</h2>
+  <form method="post" action="/podcasts" class="row">
+    <input type="url" name="feed_url" placeholder="https://feeds.example.com/podcast.rss" required style="flex:1; min-width:280px;">
+    <button type="submit">Add</button>
+  </form>
+  <p class="muted" style="margin-bottom:0">Accepts RSS feeds or Apple Podcasts links.</p>
+</div>
+
+{% if result.error %}
+<div class="card"><p class="muted" style="margin:0;">{{ result.error }}</p></div>
+{% elif not result.podcasts %}
+<div class="card"><p class="muted" style="margin:0;">No podcasts yet. Add one above.</p></div>
+{% else %}
+
+<div class="grid-stats" style="margin-bottom:22px;">
+  <div class="stat-card">
+    <div class="stat-label">Podcasts</div>
+    <div class="stat-value">{{ result.podcasts|length }}</div>
+    <div class="stat-hint">{{ scheduled_count }} with auto-refresh</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Downloaded</div>
+    <div class="stat-value stat-value-ok">{{ result.total_downloaded }}</div>
+    <div class="stat-hint">of {{ result.total_episode_count }} episodes</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Missing on disk</div>
+    <div class="stat-value stat-value-warn">{{ result.total_missing }}</div>
+    <div class="stat-hint">{{ result.total_size_bytes|filesize }} on disk</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">In queue</div>
+    <div class="stat-value stat-value-accent">{{ queue_totals.pending_episodes }}</div>
+    <div class="stat-hint">{{ queue_totals.running_jobs }} running now</div>
+  </div>
+  <a href="/storage" class="stat-card" style="text-decoration:none; color:inherit;">
+    <div class="stat-label">Archive health</div>
+    <div class="stat-value {{ 'stat-value-warn' if result.total_corrupt else 'stat-value-ok' }}">{{ result.total_corrupt }}</div>
+    <div class="stat-hint">corrupt · {{ result.total_local_only }} local-only kept</div>
+  </a>
+</div>
+
+<div class="row between" style="margin-bottom:16px; flex-wrap:wrap; gap:10px;">
+  <div class="row" style="gap:8px; flex-wrap:wrap;">
+    {% for f in filters %}
+    <a href="/?filter={{ f }}{{ '&q=' + query if query else '' }}" class="pill {{ 'pill-active' if f == active_filter else '' }}">{{ f }}</a>
+    {% endfor %}
+  </div>
+  <form method="post" action="/verify">
+    <button type="submit" class="secondary btn-sm">Verify all files</button>
+  </form>
+</div>
+
+{% if not visible_podcasts %}
+<div class="card"><p class="muted" style="margin:0;">No podcast matches this filter.</p></div>
+{% else %}
+<div class="grid-cards">
+  {% for p in visible_podcasts %}
+  <a href="/podcasts/{{ p.name }}" style="display:flex; flex-direction:column; gap:10px; color:inherit;">
+    <div class="cover-placeholder" style="position:relative; aspect-ratio:1/1; background:{{ cover_gradient(p.name) }}; padding:10px; align-items:flex-end;">
+      {% if p.podcast_image_url %}
+      <img src="{{ p.podcast_image_url }}" alt="" style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover; border-radius:11px;" onerror="this.style.display='none';">
+      {% else %}
+      cover art
+      {% endif %}
+      <div style="position:relative; display:flex; align-items:center; gap:6px; background:rgba(8,10,13,0.82); border:1px solid rgba(255,255,255,0.1); border-radius:99px; padding:4px 9px; font-size:11px; color:var(--text);" class="mono">
+        <span style="width:6px; height:6px; border-radius:99px; background:{{ 'var(--warn)' if (p.missing_episodes or 0) > 0 else ('var(--ok)' if p.downloaded_episodes == p.total_episodes else 'var(--accent)') }};"></span>
+        {{ p.downloaded_episodes if p.downloaded_episodes is not none else 0 }}/{{ p.total_episodes if p.total_episodes is not none else 0 }}
+      </div>
+    </div>
+    <div style="display:flex; flex-direction:column; gap:3px;">
+      <div style="font-size:13.5px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ p.display_name }}</div>
+      <div class="mono" style="font-size:11px; color:var(--faint); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ p.name }}</div>
+      <div style="height:3px; border-radius:99px; background:var(--input-bg); overflow:hidden; margin-top:5px;">
+        <div style="height:100%; background:{{ 'var(--warn)' if (p.missing_episodes or 0) > 0 else ('var(--ok)' if p.downloaded_episodes == p.total_episodes else 'var(--accent)') }}; width:{{ ((p.downloaded_episodes / p.total_episodes * 100) if p.total_episodes else 0)|round|int }}%;"></div>
+      </div>
+      <div class="row between" style="font-size:11.5px; color:var(--dim); margin-top:3px;">
+        <span>
+          {% if (p.missing_episodes or 0) > 0 %}{{ p.missing_episodes }} missing
+          {% elif p.downloaded_episodes == p.total_episodes %}complete
+          {% else %}{{ (p.total_episodes or 0) - (p.downloaded_episodes or 0) }} pending{% endif %}
+        </span>
+        <span class="mono">{{ p.total_size_bytes|filesize }}</span>
+      </div>
+      {% if (p.corrupt_episodes or 0) > 0 or (p.local_only_episodes or 0) > 0 %}
+      <div class="row" style="gap:6px; margin-top:4px;">
+        {% if (p.corrupt_episodes or 0) > 0 %}<span class="chip chip-err" style="font-size:10.5px; padding:2px 7px;">{{ p.corrupt_episodes }} corrupt</span>{% endif %}
+        {% if (p.local_only_episodes or 0) > 0 %}<span class="chip chip-purple" style="font-size:10.5px; padding:2px 7px;">{{ p.local_only_episodes }} local</span>{% endif %}
+      </div>
+      {% endif %}
+    </div>
+  </a>
+  {% endfor %}
+</div>
+{% endif %}
+{% endif %}
+{% endblock %}

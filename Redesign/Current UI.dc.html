@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<style>
+  body { margin:0; background:#08090c; }
+  a { color:#5b8def; }
+  a:hover { color:#7aa4f5; }
+</style>
+</helmet>
+
+<div style="background:#08090c; padding:48px; display:flex; flex-direction:column; gap:56px; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;">
+
+  <div style="display:flex; flex-direction:column; gap:6px; max-width:1040px;">
+    <div style="font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:12px; letter-spacing:0.08em; text-transform:uppercase; color:#5b8def;">Recreation · current build</div>
+    <div style="font-size:26px; font-weight:600; color:#e6e8eb;">PodcastFetch web UI, as it exists today</div>
+    <div style="font-size:14px; line-height:1.55; color:#9aa1ab; max-width:720px;">FastAPI + Jinja2, server-rendered, four templates extending <code style="background:#0d0f13; border:1px solid #262b35; border-radius:4px; padding:0.1rem 0.4rem; font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:0.82rem;">base.html</code>. Copy is in Spanish, palette and spacing taken verbatim from the stylesheet in <code style="background:#0d0f13; border:1px solid #262b35; border-radius:4px; padding:0.1rem 0.4rem; font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:0.82rem;">base.html</code>.</div>
+  </div>
+
+  <!-- ============ DASHBOARD ============ -->
+  <div data-screen-label="Dashboard" style="display:flex; flex-direction:column; gap:10px; max-width:1040px;">
+    <div style="display:flex; align-items:baseline; gap:10px;">
+      <span style="font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:12px; color:#e6e8eb; background:#171a21; border:1px solid #262b35; border-radius:5px; padding:3px 8px;">GET /</span>
+      <span style="font-size:13px; color:#9aa1ab;">dashboard.html</span>
+    </div>
+    <div style="background:#0f1115; color:#e6e8eb; border:1px solid #262b35; border-radius:12px; overflow:hidden;">
+      <div style="padding:1rem 1.5rem; border-bottom:1px solid #262b35;">
+        <div style="display:flex; gap:0.5rem; align-items:baseline; flex-wrap:wrap; justify-content:space-between; width:100%;">
+          <a href="#dashboard" style="color:#e6e8eb; text-decoration:none; font-weight:600; font-size:1.15rem;">🎙️ PodcastFetch</a>
+          <a href="#settings" style="color:#9aa1ab; font-size:0.85rem; text-decoration:underline;">⚙️ Configuración</a>
+        </div>
+      </div>
+      <div style="max-width:960px; margin:0 auto; padding:1.5rem;">
+
+        <div style="padding:0.7rem 1rem; border-radius:8px; margin-bottom:1.25rem; font-size:0.9rem; background:rgba(63,178,127,0.12); color:#3fb27f; border:1px solid rgba(63,178,127,0.3);">Todo en orden, no falta ningún archivo</div>
+
+        <div style="background:#171a21; border:1px solid #262b35; border-radius:10px; padding:1.25rem; margin-bottom:1.25rem;">
+          <h2 style="margin:0 0 0.83rem 0; font-size:1.05rem;">Agregar podcast</h2>
+          <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
+            <div style="flex:1; min-width:280px; background:#0d0f13; border:1px solid #262b35; color:#9aa1ab; padding:0.5rem 0.7rem; border-radius:6px; font-size:0.88rem;">https://feeds.example.com/podcast.rss</div>
+            <div style="background:#5b8def; color:#ffffff; padding:0.5rem 0.9rem; border-radius:6px; font-size:0.85rem; font-weight:600; white-space:nowrap;">Agregar</div>
+          </div>
+          <p style="color:#9aa1ab; font-size:0.85rem; margin:1rem 0 0 0;">Acepta feeds RSS o enlaces de Apple Podcasts.</p>
+        </div>
+
+        <div style="background:#171a21; border:1px solid #262b35; border-radius:10px; padding:1.25rem; margin-bottom:1.25rem;">
+          <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap; justify-content:space-between;">
+            <h2 style="margin:0; font-size:1.05rem;">Podcasts</h2>
+            <div style="background:transparent; border:1px solid #262b35; color:#e6e8eb; padding:0.5rem 0.9rem; border-radius:6px; font-size:0.85rem; font-weight:600; white-space:nowrap;">Verificar todos los archivos</div>
+          </div>
+          <table style="width:100%; border-collapse:collapse; margin-top:1rem;">
+            <thead>
+              <tr>
+                <th style="text-align:left; padding:0.55rem 0.6rem; border-bottom:1px solid #262b35; color:#9aa1ab; font-weight:600; font-size:0.75rem; text-transform:uppercase; letter-spacing:0.04em; vertical-align:top;">Podcast</th>
+                <th style="text-align:left; padding:0.55rem 0.6rem; border-bottom:1px solid #262b35; color:#9aa1ab; font-weight:600; font-size:0.75rem; text-transform:uppercase; letter-spacing:0.04em; vertical-align:top;">Descargados</th>
+                <th style="text-align:left; padding:0.55rem 0.6rem; border-bottom:1px solid #262b35;"></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td style="text-align:left; padding:0.55rem 0.6rem; border-bottom:1px solid #262b35; font-size:0.9rem; vertical-align:top;"><a href="#detail" style="color:#5b8def;">the_long_view</a></td>
+                <td style="text-align:left; padding:0.55rem 0.6rem; border-bottom:1px solid #262b35; font-size:0.9rem; vertical-align:top;">128 / 214</td>
+                <td style="text-align:left; padding:0.55rem 0.6rem; border-bottom:1px solid #262b35; font-size:0.9rem; vertical-align:top;"><a href="#detail" style="color:#5b8def;">Ver →</a></td>
+              </tr>
+              <tr>
+                <td style="text-align:left; padding:0.55rem 0.6rem; border-bottom:1px solid #262b35; font-size:0.9rem; vertical-align:top;"><a href="#detail" style="color:#5b8def;">field_notes_semanal</a></td>
+                <td style="text-align:left; padding:0.55rem 0.6rem; border-bottom:1px solid #262b35; font-size:0.9rem; vertical-align:top;">46 / 46</td>
+                <td style="text-align:left; padding:0.55rem 0.6rem; border-bottom:1px solid #262b35; font-size:0.9rem; vertical-align:top;"><a href="#detail" style="color:#5b8def;">Ver →</a></td>
+              </tr>
+              <tr>
+                <td style="text-align:left; padding:0.55rem 0.6rem; border-bottom:1px solid #262b35; font-size:0.9rem; vertical-align:top;"><a href="#detail" style="color:#5b8def;">taller_de_sonido</a></td>
+                <td style="text-align:left; padding:0.55rem 0.6rem; border-bottom:1px solid #262b35; font-size:0.9rem; vertical-align:top;">3 / 89</td>
+                <td style="text-align:left; padding:0.55rem 0.6rem; border-bottom:1px solid #262b35; font-size:0.9rem; vertical-align:top;"><a href="#detail" style="color:#5b8def;">Ver →</a></td>
+              </tr>
+              <tr>
+                <td style="text-align:left; padding:0.55rem 0.6rem; border-bottom:1px solid #262b35; font-size:0.9rem; vertical-align:top;"><a href="#detail" style="color:#5b8def;">historia_en_cinta</a></td>
+                <td style="text-align:left; padding:0.55rem 0.6rem; border-bottom:1px solid #262b35; font-size:0.9rem; vertical-align:top;">— / —</td>
+                <td style="text-align:left; padding:0.55rem 0.6rem; border-bottom:1px solid #262b35; font-size:0.9rem; vertical-align:top;"><a href="#detail" style="color:#5b8def;">Ver →</a></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ PODCAST DETAIL ============ -->
+  <div data-screen-label="Podcast detail" style="display:flex; flex-direction:column; gap:10px; max-width:1040px;">
+    <div style="display:flex; align-items:baseline; gap:10px;">
+      <span style="font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:12px; color:#e6e8eb; background:#171a21; border:1px solid #262b35; border-radius:5px; padding:3px 8px;">GET /podcasts/{name}</span>
+      <span style="font-size:13px; color:#9aa1ab;">podcast_detail.html · 50 episodes per page · player bar</span>
+    </div>
+    <div style="background:#0f1115; color:#e6e8eb; border:1px solid #262b35; border-radius:12px; overflow:hidden; position:relative;">
+      <div style="padding:1rem 1.5rem; border-bottom:1px solid #262b35;">
+        <div style="display:flex; gap:0.5rem; align-items:baseline; flex-wrap:wrap; justify-content:space-between; width:100%;">
+          <a href="#dashboard" style="color:#e6e8eb; text-decoration:none; font-weight:600; font-size:1.15rem;">🎙️ PodcastFetch</a>
+          <a href="#settings" style="color:#9aa1ab; font-size:0.85rem; text-decoration:underline;">⚙️ Configuración</a>
+        </div>
+      </div>
+      <div style="max-width:960px; margin:0 auto; padding:1.5rem;">
+        <p style="margin:0 0 1rem 0; font-size:1rem;"><a href="#dashboard" style="color:#5b8def;">← Dashboard</a></p>
+
+        <div style="background:#171a21; border:1px solid #262b35; border-radius:10px; padding:1.25rem; margin-bottom:1.25rem;">
+          <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap; justify-content:space-between;">
+            <h2 style="margin:0; font-size:1.05rem;">the_long_view</h2>
+            <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
+              <div style="background:transparent; border:1px solid #262b35; color:#e6e8eb; padding:0.5rem 0.9rem; border-radius:6px; font-size:0.85rem; font-weight:600; white-space:nowrap;">Verificar archivos</div>
+              <div style="background:transparent; border:1px solid #262b35; color:#e6e8eb; padding:0.5rem 0.9rem; border-radius:6px; font-size:0.85rem; font-weight:600; white-space:nowrap;">Bajar último</div>
+              <div style="background:#5b8def; color:#ffffff; padding:0.5rem 0.9rem; border-radius:6px; font-size:0.85rem; font-weight:600; white-space:nowrap;">Bajar todos los pendientes</div>
+            </div>
+          </div>
+          <p style="color:#9aa1ab; font-size:0.85rem; margin:1rem 0 0 0;">214 episodio(s) en total</p>
+        </div>
+
+        <div style="background:#171a21; border:1px solid #262b35; border-radius:10px; padding:1.25rem; margin-bottom:1.25rem;">
+          <h2 style="margin:0 0 0.83rem 0; font-size:1.05rem;">Auto-actualización</h2>
+          <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
+            <div style="background:#0d0f13; border:1px solid #262b35; color:#e6e8eb; padding:0.35rem 0.5rem; border-radius:6px; font-size:0.85rem;">Cada 12h ▾</div>
+            <label style="display:flex; gap:0.3rem; align-items:center; flex-wrap:wrap; color:#9aa1ab; font-size:0.85rem;">
+              <input type="checkbox" checked="checked" style="accent-color:#5b8def;">
+              Descargar automáticamente los nuevos
+            </label>
+            <div style="background:transparent; border:1px solid #262b35; color:#e6e8eb; padding:0.5rem 0.9rem; border-radius:6px; font-size:0.85rem; font-weight:600; white-space:nowrap;">Guardar</div>
+          </div>
+          <p style="color:#9aa1ab; font-size:0.85rem; margin:0.5rem 0 0 0;">Última revisión: hace 3h</p>
+        </div>
+
+        <div style="background:#171a21; border:1px solid #262b35; border-radius:10px; padding:1.25rem; margin-bottom:1.25rem;">
+          <table style="width:100%; border-collapse:collapse;">
+            <thead>
+              <tr>
+                <th style="text-align:left; padding:0.55rem 0.6rem; border-bottom:1px solid #262b35;"></th>
+                <th style="text-align:left; padding:0.55rem 0.6rem; border-bottom:1px solid #262b35; color:#9aa1ab; font-weight:600; font-size:0.75rem; text-transform:uppercase; letter-spacing:0.04em; vertical-align:top;">Episodio</th>
+                <th style="text-align:left; padding:0.55rem 0.6rem; border-bottom:1px solid #262b35; color:#9aa1ab; font-weight:600; font-size:0.75rem; text-transform:uppercase; letter-spacing:0.04em; vertical-align:top;">Estado</th>
+                <th style="text-align:left; padding:0.55rem 0.6rem; border-bottom:1px solid #262b35; color:#9aa1ab; font-weight:600; font-size:0.75rem; text-transform:uppercase; letter-spacing:0.04em; vertical-align:top;">Nombre personalizado</th>
+                <th style="text-align:left; padding:0.55rem 0.6rem; border-bottom:1px solid #262b35; color:#9aa1ab; font-weight:600; font-size:0.75rem; text-transform:uppercase; letter-spacing:0.04em; vertical-align:top;">Archivo</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td style="padding:0.55rem 0.6rem; border-bottom:1px solid #262b35; vertical-align:top;"><div style="background:transparent; border:1px solid #262b35; color:#e6e8eb; padding:0.5rem 0.9rem; border-radius:6px; font-size:0.85rem; font-weight:600; display:inline-block;">▶</div></td>
+                <td style="padding:0.55rem 0.6rem; border-bottom:1px solid #262b35; font-size:0.9rem; vertical-align:top;">214 · Lo que queda cuando se apaga el micrófono</td>
+                <td style="padding:0.55rem 0.6rem; border-bottom:1px solid #262b35; font-size:0.9rem; vertical-align:top;"><span style="display:inline-block; padding:0.15rem 0.55rem; border-radius:999px; font-size:0.72rem; font-weight:600; white-space:nowrap; background:rgba(63,178,127,0.15); color:#3fb27f;">descargado</span></td>
+                <td style="padding:0.55rem 0.6rem; border-bottom:1px solid #262b35; vertical-align:top;">
+                  <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:nowrap;">
+                    <div style="width:200px; background:#0d0f13; border:1px solid #262b35; color:#9aa1ab; padding:0.5rem 0.7rem; border-radius:6px; font-size:0.88rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">Lo que queda cuando…</div>
+                    <div style="background:transparent; border:1px solid #262b35; color:#e6e8eb; padding:0.5rem 0.9rem; border-radius:6px; font-size:0.85rem; font-weight:600; white-space:nowrap;">Guardar</div>
+                  </div>
+                </td>
+                <td style="padding:0.55rem 0.6rem; border-bottom:1px solid #262b35; font-size:0.9rem; vertical-align:top; color:#9aa1ab; max-width:260px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">downloads/the_long_view/2026/08/214 - Lo que queda…</td>
+              </tr>
+              <tr>
+                <td style="padding:0.55rem 0.6rem; border-bottom:1px solid #262b35; vertical-align:top;"><div style="background:transparent; border:1px solid #262b35; color:#e6e8eb; padding:0.5rem 0.9rem; border-radius:6px; font-size:0.85rem; font-weight:600; display:inline-block;">▶</div></td>
+                <td style="padding:0.55rem 0.6rem; border-bottom:1px solid #262b35; font-size:0.9rem; vertical-align:top;">213 · Archivos que nadie volvió a abrir</td>
+                <td style="padding:0.55rem 0.6rem; border-bottom:1px solid #262b35; font-size:0.9rem; vertical-align:top;"><span style="display:inline-block; padding:0.15rem 0.55rem; border-radius:999px; font-size:0.72rem; font-weight:600; white-space:nowrap; background:rgba(63,178,127,0.15); color:#3fb27f;">descargado</span></td>
+                <td style="padding:0.55rem 0.6rem; border-bottom:1px solid #262b35; vertical-align:top;">
+                  <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:nowrap;">
+                    <div style="width:200px; background:#0d0f13; border:1px solid #262b35; color:#5f666f; padding:0.5rem 0.7rem; border-radius:6px; font-size:0.88rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">Archivos que nadie…</div>
+                    <div style="background:transparent; border:1px solid #262b35; color:#e6e8eb; padding:0.5rem 0.9rem; border-radius:6px; font-size:0.85rem; font-weight:600; white-space:nowrap;">Guardar</div>
+                  </div>
+                </td>
+                <td style="padding:0.55rem 0.6rem; border-bottom:1px solid #262b35; font-size:0.9rem; vertical-align:top; color:#9aa1ab; max-width:260px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">downloads/the_long_view/2026/08/213 - Archivos que…</td>
+              </tr>
+              <tr>
+                <td style="padding:0.55rem 0.6rem; border-bottom:1px solid #262b35; vertical-align:top;"></td>
+                <td style="padding:0.55rem 0.6rem; border-bottom:1px solid #262b35; font-size:0.9rem; vertical-align:top;">212 · Una hora con el archivista</td>
+                <td style="padding:0.55rem 0.6rem; border-bottom:1px solid #262b35; font-size:0.9rem; vertical-align:top;"><span style="display:inline-block; padding:0.15rem 0.55rem; border-radius:999px; font-size:0.72rem; font-weight:600; white-space:nowrap; background:rgba(224,161,58,0.15); color:#e0a13a;">faltante</span></td>
+                <td style="padding:0.55rem 0.6rem; border-bottom:1px solid #262b35; vertical-align:top;">
+                  <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:nowrap;">
+                    <div style="width:200px; background:#0d0f13; border:1px solid #262b35; color:#5f666f; padding:0.5rem 0.7rem; border-radius:6px; font-size:0.88rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">Una hora con el arc…</div>
+                    <div style="background:transparent; border:1px solid #262b35; color:#e6e8eb; padding:0.5rem 0.9rem; border-radius:6px; font-size:0.85rem; font-weight:600; white-space:nowrap;">Guardar</div>
+                  </div>
+                </td>
+                <td style="padding:0.55rem 0.6rem; border-bottom:1px solid #262b35; font-size:0.9rem; vertical-align:top; color:#9aa1ab; max-width:260px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">downloads/the_long_view/2026/07/212 - Una hora con…</td>
+              </tr>
+              <tr>
+                <td style="padding:0.55rem 0.6rem; border-bottom:1px solid #262b35; vertical-align:top;"></td>
+                <td style="padding:0.55rem 0.6rem; border-bottom:1px solid #262b35; font-size:0.9rem; vertical-align:top;">211 · El costo de guardar todo</td>
+                <td style="padding:0.55rem 0.6rem; border-bottom:1px solid #262b35; font-size:0.9rem; vertical-align:top;"><span style="display:inline-block; padding:0.15rem 0.55rem; border-radius:999px; font-size:0.72rem; font-weight:600; white-space:nowrap; background:rgba(154,161,171,0.15); color:#9aa1ab;">pendiente</span></td>
+                <td style="padding:0.55rem 0.6rem; border-bottom:1px solid #262b35; vertical-align:top;">
+                  <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:nowrap;">
+                    <div style="width:200px; background:#0d0f13; border:1px solid #262b35; color:#5f666f; padding:0.5rem 0.7rem; border-radius:6px; font-size:0.88rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">El costo de guardar…</div>
+                    <div style="background:transparent; border:1px solid #262b35; color:#e6e8eb; padding:0.5rem 0.9rem; border-radius:6px; font-size:0.85rem; font-weight:600; white-space:nowrap;">Guardar</div>
+                  </div>
+                </td>
+                <td style="padding:0.55rem 0.6rem; border-bottom:1px solid #262b35; font-size:0.9rem; vertical-align:top; color:#9aa1ab; max-width:260px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">—</td>
+              </tr>
+              <tr>
+                <td style="padding:0.55rem 0.6rem; border-bottom:1px solid #262b35; vertical-align:top;"></td>
+                <td style="padding:0.55rem 0.6rem; border-bottom:1px solid #262b35; font-size:0.9rem; vertical-align:top;">210 · Temporada 4, cierre</td>
+                <td style="padding:0.55rem 0.6rem; border-bottom:1px solid #262b35; font-size:0.9rem; vertical-align:top;"><span style="display:inline-block; padding:0.15rem 0.55rem; border-radius:999px; font-size:0.72rem; font-weight:600; white-space:nowrap; background:rgba(154,161,171,0.15); color:#9aa1ab;">pendiente</span></td>
+                <td style="padding:0.55rem 0.6rem; border-bottom:1px solid #262b35; vertical-align:top;">
+                  <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:nowrap;">
+                    <div style="width:200px; background:#0d0f13; border:1px solid #262b35; color:#5f666f; padding:0.5rem 0.7rem; border-radius:6px; font-size:0.88rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">Temporada 4, cierre</div>
+                    <div style="background:transparent; border:1px solid #262b35; color:#e6e8eb; padding:0.5rem 0.9rem; border-radius:6px; font-size:0.85rem; font-weight:600; white-space:nowrap;">Guardar</div>
+                  </div>
+                </td>
+                <td style="padding:0.55rem 0.6rem; border-bottom:1px solid #262b35; font-size:0.9rem; vertical-align:top; color:#9aa1ab; max-width:260px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">—</td>
+              </tr>
+            </tbody>
+          </table>
+          <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap; justify-content:center; margin-top:1rem;">
+            <a href="#detail" style="color:#5b8def; font-size:1rem;">← Anterior</a>
+            <span style="color:#9aa1ab; font-size:0.85rem;">Página 1 de 5</span>
+            <a href="#detail" style="color:#5b8def; font-size:1rem;">Siguiente →</a>
+          </div>
+        </div>
+
+        <div style="height:5rem;"></div>
+      </div>
+
+      <div style="position:absolute; left:0; right:0; bottom:0; background:#171a21; border-top:1px solid #262b35; padding:0.6rem 1.25rem; display:flex; align-items:center; gap:0.75rem;">
+        <div style="width:44px; height:44px; border-radius:6px; background:#0d0f13; flex-shrink:0; display:flex; align-items:center; justify-content:center; color:#3b4048; font-size:10px; font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;">cover</div>
+        <div style="min-width:0; max-width:220px; flex-shrink:0;">
+          <div style="font-size:0.85rem; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">Lo que queda cuando se apaga el micrófono</div>
+          <div style="color:#9aa1ab; font-size:0.78rem;">the_long_view</div>
+        </div>
+        <audio controls="controls" style="flex:1; min-width:0; max-width:100%;"></audio>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ JOB PROGRESS ============ -->
+  <div data-screen-label="Job progress" style="display:flex; flex-direction:column; gap:10px; max-width:1040px;">
+    <div style="display:flex; align-items:baseline; gap:10px;">
+      <span style="font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:12px; color:#e6e8eb; background:#171a21; border:1px solid #262b35; border-radius:5px; padding:3px 8px;">GET /jobs/{job_id}</span>
+      <span style="font-size:13px; color:#9aa1ab;">job.html · polls /jobs/{id}/status every 1s</span>
+    </div>
+    <div style="background:#0f1115; color:#e6e8eb; border:1px solid #262b35; border-radius:12px; overflow:hidden;">
+      <div style="padding:1rem 1.5rem; border-bottom:1px solid #262b35;">
+        <div style="display:flex; gap:0.5rem; align-items:baseline; flex-wrap:wrap; justify-content:space-between; width:100%;">
+          <a href="#dashboard" style="color:#e6e8eb; text-decoration:none; font-weight:600; font-size:1.15rem;">🎙️ PodcastFetch</a>
+          <a href="#settings" style="color:#9aa1ab; font-size:0.85rem; text-decoration:underline;">⚙️ Configuración</a>
+        </div>
+      </div>
+      <div style="max-width:960px; margin:0 auto; padding:1.5rem;">
+        <div style="background:#171a21; border:1px solid #262b35; border-radius:10px; padding:1.25rem; margin-bottom:1.25rem;">
+          <h2 style="margin:0 0 0.83rem 0; font-size:1.05rem;">En progreso… (18/86)</h2>
+          <div style="height:10px; background:#0d0f13; border-radius:999px; overflow:hidden; border:1px solid #262b35;">
+            <div style="height:100%; background:#5b8def; width:21%;"></div>
+          </div>
+          <p style="color:#9aa1ab; font-size:0.85rem; margin:0.75rem 0 0 0;">Descargando 018 - Archivos que nadie volvió a abrir</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ SETTINGS ============ -->
+  <div data-screen-label="Settings" style="display:flex; flex-direction:column; gap:10px; max-width:1040px;">
+    <div style="display:flex; align-items:baseline; gap:10px;">
+      <span style="font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:12px; color:#e6e8eb; background:#171a21; border:1px solid #262b35; border-radius:5px; padding:3px 8px;">GET /settings</span>
+      <span style="font-size:13px; color:#9aa1ab;">settings.html · debounced live preview</span>
+    </div>
+    <div style="background:#0f1115; color:#e6e8eb; border:1px solid #262b35; border-radius:12px; overflow:hidden;">
+      <div style="padding:1rem 1.5rem; border-bottom:1px solid #262b35;">
+        <div style="display:flex; gap:0.5rem; align-items:baseline; flex-wrap:wrap; justify-content:space-between; width:100%;">
+          <a href="#dashboard" style="color:#e6e8eb; text-decoration:none; font-weight:600; font-size:1.15rem;">🎙️ PodcastFetch</a>
+          <a href="#settings" style="color:#9aa1ab; font-size:0.85rem; text-decoration:underline;">⚙️ Configuración</a>
+        </div>
+      </div>
+      <div style="max-width:960px; margin:0 auto; padding:1.5rem;">
+        <p style="margin:0 0 1rem 0; font-size:1rem;"><a href="#dashboard" style="color:#5b8def;">← Dashboard</a></p>
+
+        <div style="background:#171a21; border:1px solid #262b35; border-radius:10px; padding:1.25rem; margin-bottom:1.25rem;">
+          <h2 style="margin:0 0 0.83rem 0; font-size:1.05rem;">Nomenclatura de carpetas y archivos</h2>
+          <p style="color:#9aa1ab; font-size:0.85rem; margin:0 0 1rem 0;">Definí cómo se nombran la carpeta y el archivo de cada episodio nuevo. No afecta lo ya descargado — usá <code style="background:#0d0f13; border:1px solid #262b35; border-radius:4px; padding:0.1rem 0.4rem; font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:0.82rem;">podcast-fetch migrate-layout</code> si querés reorganizarlo.</p>
+
+          <div style="margin-bottom:1rem;">
+            <div style="color:#9aa1ab; font-size:0.85rem; margin-bottom:0.3rem;">Carpeta</div>
+            <div style="width:100%; background:#0d0f13; border:1px solid #262b35; color:#e6e8eb; padding:0.5rem 0.7rem; border-radius:6px; font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:0.85rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{podcast_name}/{year}/{month}/{episode_label} - {episode_title}</div>
+          </div>
+          <div style="margin-bottom:1rem;">
+            <div style="color:#9aa1ab; font-size:0.85rem; margin-bottom:0.3rem;">Nombre de archivo</div>
+            <div style="width:100%; background:#0d0f13; border:1px solid #262b35; color:#e6e8eb; padding:0.5rem 0.7rem; border-radius:6px; font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:0.85rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{episode_title} - {podcast_name}</div>
+          </div>
+
+          <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap; margin-bottom:1rem;">
+            <span style="color:#9aa1ab; font-size:0.85rem;">Variables:</span>
+            <code style="background:#0d0f13; border:1px solid #262b35; border-radius:4px; padding:0.1rem 0.4rem; font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:0.82rem;">{podcast_name}</code>
+            <code style="background:#0d0f13; border:1px solid #262b35; border-radius:4px; padding:0.1rem 0.4rem; font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:0.82rem;">{episode_title}</code>
+            <code style="background:#0d0f13; border:1px solid #262b35; border-radius:4px; padding:0.1rem 0.4rem; font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:0.82rem;">{episode_number}</code>
+            <code style="background:#0d0f13; border:1px solid #262b35; border-radius:4px; padding:0.1rem 0.4rem; font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:0.82rem;">{season_number}</code>
+            <code style="background:#0d0f13; border:1px solid #262b35; border-radius:4px; padding:0.1rem 0.4rem; font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:0.82rem;">{year}</code>
+            <code style="background:#0d0f13; border:1px solid #262b35; border-radius:4px; padding:0.1rem 0.4rem; font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:0.82rem;">{month}</code>
+            <code style="background:#0d0f13; border:1px solid #262b35; border-radius:4px; padding:0.1rem 0.4rem; font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:0.82rem;">{day}</code>
+            <code style="background:#0d0f13; border:1px solid #262b35; border-radius:4px; padding:0.1rem 0.4rem; font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:0.82rem;">{date}</code>
+            <code style="background:#0d0f13; border:1px solid #262b35; border-radius:4px; padding:0.1rem 0.4rem; font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:0.82rem;">{episode_label}</code>
+          </div>
+
+          <div style="background:#5b8def; color:#ffffff; padding:0.5rem 0.9rem; border-radius:6px; font-size:0.85rem; font-weight:600; white-space:nowrap; display:inline-block;">Guardar</div>
+        </div>
+
+        <div style="background:#171a21; border:1px solid #262b35; border-radius:10px; padding:1.25rem; margin-bottom:1.25rem;">
+          <h2 style="margin:0 0 0.83rem 0; font-size:1.05rem;">Vista previa</h2>
+          <p style="color:#9aa1ab; font-size:0.85rem; margin:0 0 0.5rem 0;">Ejemplo con un episodio de muestra (número 7, temporada 2, fecha 2024-03-07):</p>
+          <div style="font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:0.85rem;">
+            <p style="color:#9aa1ab; margin:0.2rem 0;">Carpeta:</p>
+            <p style="margin:0 0 0.6rem 0;">downloads/podcast_de_muestra/2024/03/007 - Un episodio de muestra/</p>
+            <p style="color:#9aa1ab; margin:0.2rem 0;">Archivo:</p>
+            <p style="margin:0;">Un episodio de muestra - podcast_de_muestra.mp3</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+</x-dc>
+</body>
+</html>

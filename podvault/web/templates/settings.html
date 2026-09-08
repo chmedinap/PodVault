@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+{% block title %}Settings - PodVault{% endblock %}
+{% block topbar_title %}Settings{% endblock %}
+{% block topbar_subtitle %}naming templates &amp; environment{% endblock %}
+{% block content %}
+<div style="max-width:900px;">
+
+<div class="card">
+  <div style="font-size:14px; font-weight:600;">Folder & filename naming</div>
+  <p class="muted" style="margin-top:5px; line-height:1.55;">
+    Applies to new downloads only. Validated against two sample episodes — one numbered, one not —
+    so a template that fails on unnumbered episodes gets rejected here, not mid-download.
+    To reorganize what's already downloaded, use <code>podvault migrate-layout</code> from the CLI.
+  </p>
+
+  <form method="post" action="/settings" id="settings-form">
+    <div style="margin:14px 0 12px 0;">
+      <label class="muted" style="display:block; margin-bottom:6px; font-size:11.5px; font-weight:500;">Folder</label>
+      <input type="text" name="folder_template" id="folder_template" class="mono" style="width:100%;" value="{{ folder_template }}">
+    </div>
+    <div style="margin-bottom:14px;">
+      <label class="muted" style="display:block; margin-bottom:6px; font-size:11.5px; font-weight:500;">Filename</label>
+      <input type="text" name="filename_template" id="filename_template" class="mono" style="width:100%;" value="{{ filename_template }}">
+    </div>
+
+    <div class="row" style="margin-bottom:14px; gap:6px;">
+      <span class="muted" style="font-size:11.5px; margin-right:2px;">Insert:</span>
+      {% for v in variables %}
+      <span class="mono insert-token" data-token="{{ '{' + v + '}' }}"
+            style="font-size:11.5px; color:#c9ced6; background:var(--code-bg); border:1px solid var(--border-strong); border-radius:6px; padding:4px 8px; cursor:pointer;">{{ '{' + v + '}' }}</span>
+      {% endfor %}
+    </div>
+
+    <div style="background:var(--input-bg); border:1px solid var(--border-strong); border-radius:10px; padding:14px; margin-bottom:14px;">
+      <div class="row" style="gap:8px; margin-bottom:9px;">
+        <span style="font-size:11px; letter-spacing:0.07em; text-transform:uppercase; color:var(--dim); font-weight:600;">Live preview</span>
+        <span style="font-size:11.5px; color:var(--faint);">episode 7 · season 2 · 2024-03-07</span>
+      </div>
+      <div id="preview-box" class="mono">
+        {% if preview.error %}
+          <p style="color:var(--err); margin:0;">{{ preview.error }}</p>
+        {% else %}
+          <p class="muted" style="margin:0.2rem 0;">folder</p>
+          <p style="margin:0 0 0.6rem 0; word-break:break-all;" id="preview-folder">downloads/{{ preview.folder_path }}/</p>
+          <p class="muted" style="margin:0.2rem 0;">file</p>
+          <p style="margin:0; word-break:break-all;" id="preview-filename">{{ preview.filename }}.mp3</p>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="row" style="gap:9px;">
+      <button type="submit">Save templates</button>
+      <button type="button" id="restore-defaults" class="secondary">Restore defaults</button>
+    </div>
+  </form>
+</div>
+
+<div class="card">
+  <div style="font-size:14px; font-weight:600; margin-bottom:12px;">Environment</div>
+  <table>
+    <tbody>
+      {% for e in env_rows %}
+      <tr>
+        <td class="mono muted">{{ e.k }}</td>
+        <td class="mono ellipsis" style="max-width:none; text-align:right;" title="{{ e.v }}">{{ e.v }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p class="muted" style="font-size:12px; margin-bottom:0;">
+    Read-only here — set through <code>docker-compose.yml</code> or environment variables.
+  </p>
+</div>
+
+</div>
+
+<script>
+const folderInput = document.getElementById('folder_template');
+const filenameInput = document.getElementById('filename_template');
+const previewBox = document.getElementById('preview-box');
+let debounceTimer = null;
+
+async function updatePreview() {
+  const body = new URLSearchParams({
+    folder_template: folderInput.value,
+    filename_template: filenameInput.value,
+  });
+  try {
+    const res = await fetch('/settings/preview', { method: 'POST', body });
+    const data = await res.json();
+    if (data.error) {
+      previewBox.innerHTML = `<p style="color: var(--err); margin:0;">${data.error}</p>`;
+    } else {
+      previewBox.innerHTML = `
+        <p class="muted" style="margin:0.2rem 0;">folder</p>
+        <p style="margin:0 0 0.6rem 0; word-break:break-all;">downloads/${data.folder_path}/</p>
+        <p class="muted" style="margin:0.2rem 0;">file</p>
+        <p style="margin:0; word-break:break-all;">${data.filename}.mp3</p>
+      `;
+    }
+  } catch (e) {
+    // network hiccup — leave the last preview showing
+  }
+}
+
+function schedulePreview() {
+  clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(updatePreview, 300);
+}
+
+folderInput.addEventListener('input', schedulePreview);
+filenameInput.addEventListener('input', schedulePreview);
+
+document.querySelectorAll('.insert-token').forEach(function (el) {
+  el.addEventListener('click', function () {
+    folderInput.value += el.dataset.token;
+    folderInput.focus();
+    schedulePreview();
+  });
+});
+
+document.getElementById('restore-defaults').addEventListener('click', function () {
+  folderInput.value = {{ default_folder_template|tojson }};
+  filenameInput.value = {{ default_filename_template|tojson }};
+  schedulePreview();
+});
+</script>
+{% endblock %}
