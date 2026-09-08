@@ -61,6 +61,12 @@ local_settings.py
 db.sqlite3
 db.sqlite3-journal
 
+# macOS
+.DS_Store
+
+# PodVault local data
+data/podvault_data.db
+
 # Flask stuff:
 instance/
 .webassets-cache
