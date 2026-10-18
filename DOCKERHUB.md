@@ -83,7 +83,7 @@ All settings are optional environment variables.
 | `PODVAULT_LOG_FILE` | unset | Also log to this file |
 | `PODVAULT_DB_PATH`, `PODVAULT_DOWNLOADS_FOLDER`, `PODVAULT_FEEDS_FILE` | under `/app/data` | Override individual paths |
 
-The login is HTTP Basic auth, which isn't encrypted. If PodVault is reachable from the internet, put it behind an HTTPS reverse proxy (Caddy, Traefik, nginx…).
+With the login on, the browser shows a sign-in page (optionally remembered for 30 days, renewed while you use it) and the sidebar has a Sign out button. Repeated wrong passwords lock the address out for a while. Scripts can still use HTTP Basic auth. The password isn't encrypted over plain HTTP, so if PodVault is reachable from the internet, put it behind an HTTPS reverse proxy (Caddy, Traefik, nginx…).
 
 ## Listening from a podcast app
 
@@ -120,6 +120,7 @@ The image has a built-in `HEALTHCHECK` on `/healthz`, which needs no login.
 ## Tags
 
 - `latest`: the most recent release
+- `1.3.0`: sign-in page with Sign out and "keep me signed in", login lockout
 - `1.2.0`: OPML import/export, your own podcast feeds
 - `1.1.0`: web login, non-MP3 audio, database backups
 - `1.0.0`: first release

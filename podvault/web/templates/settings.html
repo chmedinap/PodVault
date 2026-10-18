@@ -86,7 +86,7 @@ async function updatePreview() {
     filename_template: filenameInput.value,
   });
   try {
-    const res = await fetch('/settings/preview', { method: 'POST', body });
+    const res = window.podvaultCheckAuth(await fetch('/settings/preview', { method: 'POST', body }));
     const data = await res.json();
     if (data.error) {
       previewBox.innerHTML = `<p style="color: var(--err); margin:0;">${data.error}</p>`;

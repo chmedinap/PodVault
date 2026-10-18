@@ -64,6 +64,10 @@
   .nav-label { flex:1; min-width:0; }
   .sidebar-spacer { flex:1; }
   .sidebar-footer { padding:6px 20px 16px 20px; font-size:11px; color:var(--faint); font-family:'IBM Plex Mono', monospace; }
+  .sidebar-account { padding:6px 12px 16px 20px; display:flex; align-items:center; justify-content:space-between; gap:8px; margin:0; }
+  .sidebar-account-label { font-size:11px; color:var(--faint); font-family:'IBM Plex Mono', monospace; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .sidebar-account button { background:transparent; color:var(--muted); font-size:12px; font-weight:500; padding:4px 8px; border-radius:6px; flex-shrink:0; }
+  .sidebar-account button:hover { background:#171b22; color:var(--text); }
   .sidebar-backdrop { display:none; }
 
   .main-area { flex:1; min-width:0; display:flex; flex-direction:column; min-height:100vh; }
@@ -246,6 +250,16 @@
     .main-content { padding:16px 16px 132px 16px; }
   }
 </style>
+<script>
+  // Fase 25: a background request answered 401 means the session ended (or was signed out in
+  // another tab) — go sign in again and come back here, instead of silently doing nothing.
+  window.podvaultCheckAuth = function (response) {
+    if (response && response.status === 401) {
+      window.location.href = '/login?next=' + encodeURIComponent(window.location.pathname + window.location.search);
+    }
+    return response;
+  };
+</script>
 {% block extra_head %}{% endblock %}
 </head>
 <body>
@@ -281,7 +295,14 @@
       </a>
     </div>
     <div class="sidebar-spacer"></div>
+    {% if login_enabled() %}
+    <form class="sidebar-account" method="post" action="/logout">
+      <span class="sidebar-account-label" title="Signed in as {{ login_username() }}">{{ login_username() }} · v{{ app_version }}</span>
+      <button type="submit">Sign out</button>
+    </form>
+    {% else %}
     <div class="sidebar-footer">v{{ app_version }}</div>
+    {% endif %}
   </div>
 
   <div class="main-area">
@@ -440,6 +461,12 @@ playerToggle.addEventListener('click', function () {
 });
 playerAudio.addEventListener('play', function () { playerToggle.textContent = '⏸'; });
 playerAudio.addEventListener('pause', function () { playerToggle.textContent = '▶'; });
+{% if login_enabled() %}
+// <audio> doesn't expose the HTTP status, so on a load error ask a cheap endpoint whether the session is gone
+playerAudio.addEventListener('error', function () {
+  fetch('/jobs/active/status').then(window.podvaultCheckAuth).catch(function () {});
+});
+{% endif %}
 
 playerBack15.addEventListener('click', function () {
   playerAudio.currentTime = Math.max(0, playerAudio.currentTime - 15);
@@ -562,12 +589,12 @@ playerSeek.addEventListener('click', function (event) {
   function pollJob() {
     if (jobStripDismissed) return;
     const url = activeJobId ? '/jobs/' + activeJobId + '/status' : '/jobs/active/status';
-    fetch(url).then(function (r) { return r.ok ? r.json() : null; }).then(renderJob).catch(function () {});
+    fetch(url).then(window.podvaultCheckAuth).then(function (r) { return r.ok ? r.json() : null; }).then(renderJob).catch(function () {});
   }
 
   jobStripCancel.addEventListener('click', function () {
     if (!activeJobId) return;
-    fetch('/jobs/' + activeJobId + '/cancel', { method: 'POST' }).then(pollJob);
+    fetch('/jobs/' + activeJobId + '/cancel', { method: 'POST' }).then(window.podvaultCheckAuth).then(pollJob);
   });
   jobStripDismiss.addEventListener('click', function () {
     jobStripDismissed = true;

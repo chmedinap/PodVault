@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="crossorigin">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  body { margin:0; background:#0b0d10; }
+  a { color:#5b8def; text-decoration:none; }
+  a:hover { color:#84a8f6; }
+  input, button { font-family:inherit; }
+  input:-webkit-autofill { -webkit-box-shadow:0 0 0 40px #0d1014 inset; -webkit-text-fill-color:#e9ebee; caret-color:#e9ebee; }
+  @keyframes pv-spin { to { transform:rotate(360deg); } }
+</style>
+</helmet>
+
+<!-- FASE 25 · LOGIN PAGE — replaces the browser's HTTP Basic popup (web/auth.py, Fase 23).
+     IMPLEMENTED: podvault/web/login.py (routes), podvault/web/auth.py (cookie + middleware),
+     podvault/web/templates/login.html — standalone (does NOT extend base.html: no sidebar, no player).
+     Plain POST form, works without JS (Show/Hide and the spinner are progressive enhancement).
+
+     Backend, keeping Fase 23's "no session store, no new dependency" rule:
+     · GET /login?next=…  → this page. Context: error, misconfigured, signed_out, next, username.
+     · POST /login (username, password, remember, next) → credentials checked with the existing
+       secrets.compare_digest on both halves → set cookie `podvault_session` → 303 to `next`
+       (only if it is a local path starting with "/", otherwise "/"). Wrong → re-render with
+       error=True, status 401, username kept, password cleared.
+     · Cookie value = "{expiry}.{hmac(PODVAULT_PASSWORD, 'podvault-session-v1:' + expiry)}", stdlib
+       only, like feed_token(). Changing the password signs everyone out, same as it revokes feed
+       URLs. remember=on → Max-Age 30 days; off → no Max-Age (browser session), expiry 12 h.
+       HttpOnly, SameSite=Lax (blocks cross-site POSTs → covers CSRF for the plain forms), Path=/.
+       Secure when the request arrived over HTTPS (X-Forwarded-Proto behind the proxy).
+     · POST /logout → delete cookie → 303 /login?signed_out=1.
+     · Middleware: PUBLIC_PATHS += /login, and /static/ (fonts, needed by this page). Valid
+       cookie OR a valid Basic header (kept for curl/scripts and the existing tests) OR feed token
+       → pass. Otherwise: GET whose Accept has text/html → 303 /login?next=<path+query>; anything
+       else (POST, audio, export) → 401 plain text WITHOUT WWW-Authenticate — that header is what
+       triggers the popup.
+     · Half-configured login: render this page with misconfigured=True (status 500) instead of the
+       plain-text 500, form disabled. Audio <audio> Range requests send the cookie (same origin). -->
+<div style="min-height:100vh; background:#0b0d10; color:#e9ebee; font-family:'IBM Plex Sans', Helvetica, Arial, sans-serif; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:32px 20px; box-sizing:border-box; gap:28px;">
+
+  <div style="display:flex; align-items:center; gap:11px;">
+    <div style="width:34px; height:34px; border-radius:9px; background:#5b8def; display:flex; align-items:center; justify-content:center; color:#0b0d10; font-weight:700; font-size:16px; font-family:'IBM Plex Mono', monospace;">P</div>
+    <div style="font-size:18px; font-weight:600; letter-spacing:-0.01em;">PodVault</div>
+  </div>
+
+  <form onSubmit="{{ onSubmit }}" method="post" action="/login" style="width:100%; max-width:380px; background:#14171c; border:1px solid #1f242c; border-radius:14px; padding:28px; box-sizing:border-box; display:flex; flex-direction:column; gap:18px;">
+    <div style="display:flex; flex-direction:column; gap:5px;">
+      <h1 style="margin:0; font-size:19px; font-weight:600; letter-spacing:-0.01em;">Sign in</h1>
+      <p style="margin:0; font-size:13px; color:#9aa1ab; line-height:1.5;">Sign in to your library.</p>
+    </div>
+
+    <!-- {% if signed_out %} -->
+    <sc-if value="{{ showSignedOut }}" hint-placeholder-val="{{ false }}">
+      <div role="status" style="display:flex; gap:10px; align-items:flex-start; padding:10px 12px; border-radius:9px; background:rgba(63,178,127,0.09); border:1px solid rgba(63,178,127,0.32);">
+        <span style="color:#3fb27f; font-size:13px; line-height:1.45; flex-shrink:0;">✓</span>
+        <span style="font-size:12.5px; color:#b6e3cd; line-height:1.5;">You've signed out.</span>
+      </div>
+    </sc-if>
+
+    <!-- {% if error %} -->
+    <sc-if value="{{ showError }}" hint-placeholder-val="{{ false }}">
+      <div role="alert" style="display:flex; gap:10px; align-items:flex-start; padding:10px 12px; border-radius:9px; background:rgba(224,82,74,0.09); border:1px solid rgba(224,82,74,0.32);">
+        <span style="color:#e0524a; font-size:13px; line-height:1.45; flex-shrink:0;">✕</span>
+        <span style="font-size:12.5px; color:#f0b3ae; line-height:1.5;">Wrong username or password.</span>
+      </div>
+    </sc-if>
+
+    <!-- {% if misconfigured %} — copy mirrors the current plain-text 500 in auth.py -->
+    <sc-if value="{{ misconfigured }}" hint-placeholder-val="{{ false }}">
+      <div role="alert" style="display:flex; flex-direction:column; gap:7px; padding:11px 12px; border-radius:9px; background:rgba(224,161,58,0.09); border:1px solid rgba(224,161,58,0.32);">
+        <span style="font-size:12.5px; color:#e0a13a; font-weight:600;">Login is misconfigured</span>
+        <span style="font-size:12.5px; color:#c9ced6; line-height:1.55;">Set both <span style="font-family:'IBM Plex Mono', monospace; font-size:11.5px; color:#e9ebee;">PODVAULT_USERNAME</span> and <span style="font-family:'IBM Plex Mono', monospace; font-size:11.5px; color:#e9ebee;">PODVAULT_PASSWORD</span>, or neither, then restart the server.</span>
+      </div>
+    </sc-if>
+
+    <!-- template: value="{{ next }}", already passed through auth.safe_next() -->
+    <input type="hidden" name="next" value="{{ next }}">
+
+    <label style="display:flex; flex-direction:column; gap:7px;">
+      <span style="font-size:12px; font-weight:600; color:#9aa1ab; letter-spacing:0.02em;">Username</span>
+      <input name="username" autocomplete="username" autofocus="autofocus" required="required" value="{{ username }}" onInput="{{ onUser }}" disabled="{{ misconfigured }}" style="background:#0d1014; border:1px solid {{ fieldBorder }}; color:#e9ebee; padding:11px 12px; border-radius:8px; font-size:14px; outline:none; opacity:{{ fieldOpacity }};" style-focus="border-color:#5b8def; box-shadow:0 0 0 3px rgba(91,141,239,0.18);">
+    </label>
+
+    <label style="display:flex; flex-direction:column; gap:7px;">
+      <span style="font-size:12px; font-weight:600; color:#9aa1ab; letter-spacing:0.02em;">Password</span>
+      <div style="position:relative; display:flex;">
+        <input name="password" type="{{ pwType }}" autocomplete="current-password" required="required" value="{{ password }}" onInput="{{ onPass }}" disabled="{{ misconfigured }}" style="flex:1; min-width:0; background:#0d1014; border:1px solid {{ fieldBorder }}; color:#e9ebee; padding:11px 64px 11px 12px; border-radius:8px; font-size:14px; outline:none; opacity:{{ fieldOpacity }};" style-focus="border-color:#5b8def; box-shadow:0 0 0 3px rgba(91,141,239,0.18);">
+        <button type="button" onClick="{{ toggleShow }}" aria-label="{{ showLabel }}" disabled="{{ misconfigured }}" style="position:absolute; right:6px; top:50%; transform:translateY(-50%); background:transparent; border:none; color:#9aa1ab; font-size:12px; font-weight:500; padding:6px 8px; border-radius:6px; cursor:pointer;" style-hover="color:#e9ebee; background:#1b1f26;">{{ showText }}</button>
+      </div>
+    </label>
+
+    <label style="display:flex; align-items:center; gap:9px; cursor:pointer; width:fit-content;">
+      <input type="checkbox" name="remember" checked="{{ remember }}" onChange="{{ toggleRemember }}" disabled="{{ misconfigured }}" style="width:15px; height:15px; margin:0; accent-color:#5b8def; cursor:pointer;">
+      <span style="font-size:13px; color:#c9ced6;">Keep me signed in for 30 days</span>
+    </label>
+
+    <button type="submit" disabled="{{ submitDisabled }}" style="display:flex; align-items:center; justify-content:center; gap:9px; background:{{ submitBg }}; color:#0a0c10; border:none; padding:11px 16px; border-radius:8px; font-size:14px; font-weight:600; cursor:pointer; margin-top:2px;" style-hover="background:#7aa4f5;">
+      <sc-if value="{{ submitting }}" hint-placeholder-val="{{ false }}">
+        <span style="width:13px; height:13px; border-radius:99px; border:2px solid rgba(10,12,16,0.3); border-top-color:#0a0c10; animation:pv-spin 0.7s linear infinite;"></span>
+      </sc-if>
+      {{ submitText }}
+    </button>
+  </form>
+
+  <div style="font-family:'IBM Plex Mono', monospace; font-size:11px; color:#565d68;">PodVault v1.3.0</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;state&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;default&quot;,&quot;error&quot;,&quot;signed-out&quot;,&quot;misconfigured&quot;],&quot;default&quot;:&quot;default&quot;,&quot;tsType&quot;:&quot;'default'|'error'|'signed-out'|'misconfigured'&quot;}}">
+class Component extends DCLogic {
+  state = { username: '', password: '', show: false, remember: true, submitting: false, failed: false };
+
+  componentDidUpdate(prev) {
+    if (prev.state !== this.props.state) this.setState({ failed: false, submitting: false });
+  }
+
+  renderVals() {
+    const s = this.state;
+    const mode = this.props.state ?? 'default';
+    const misconfigured = mode === 'misconfigured';
+    const showError = !misconfigured && (s.failed || mode === 'error');
+    return {
+      next: '/',
+      username: s.username,
+      password: s.password,
+      onUser: e => this.setState({ username: e.target.value, failed: false }),
+      onPass: e => this.setState({ password: e.target.value, failed: false }),
+      pwType: s.show ? 'text' : 'password',
+      showText: s.show ? 'Hide' : 'Show',
+      showLabel: s.show ? 'Hide password' : 'Show password',
+      toggleShow: () => this.setState({ show: !s.show }),
+      remember: s.remember,
+      toggleRemember: () => this.setState({ remember: !s.remember }),
+      showError, misconfigured,
+      showSignedOut: mode === 'signed-out' && !s.failed && !s.submitting,
+      fieldBorder: showError ? 'rgba(224,82,74,0.55)' : '#262b35',
+      fieldOpacity: misconfigured ? 0.5 : 1,
+      submitting: s.submitting,
+      submitDisabled: s.submitting || misconfigured,
+      submitBg: misconfigured ? '#3a4152' : '#5b8def',
+      submitText: s.submitting ? 'Signing in…' : 'Sign in',
+      onSubmit: e => {
+        e.preventDefault();
+        this.setState({ submitting: true, failed: false });
+        setTimeout(() => this.setState({ submitting: false, failed: true, password: '' }), 900);
+      },
+    };
+  }
+}
+</script>
+</body>
+</html>

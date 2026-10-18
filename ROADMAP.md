@@ -467,6 +467,36 @@ Added at the user's request: three features aimed specifically at the app's role
 
 ---
 
+## Phase 25 — Login page instead of the browser's Basic-auth popup ✅ IMPLEMENTED
+
+**Goal:** the Phase 23 login worked, but through the browser's own HTTP Basic prompt: no way to sign out short of closing the browser, no "remember me", and an unstyled system dialog as the first thing anyone sees. Mockups: `Redesign/Login.dc.html` and the sidebar footer in `Redesign/Redesign.dc.html`.
+
+**Backend (`web/auth.py`, new `web/login.py`).** Keeps Phase 23's "no session store, no new dependency" rule.
+- `GET /login?next=…` renders the page; `POST /login` (`username`, `password`, `remember`, `next`) checks the credentials with the existing `compare_digest` logic (now `check_login()`, shared with the Basic header path), sets `podvault_session` and redirects 303 to `safe_next(next)` (local paths only). Wrong credentials re-render with a 401, username kept, password cleared.
+- Cookie value `"{expiry}.{HMAC(password, 'podvault-session-v1:{username}:{expiry}')}"`, stdlib only like `feed_token()`, so changing the password (or username) signs everyone out. "Keep me signed in" → `Max-Age` 30 days; otherwise a browser-session cookie whose signed expiry caps it at 12 h. `HttpOnly`, `SameSite=Lax` (covers CSRF for the plain forms), `Path=/`, `Secure` over HTTPS (`X-Forwarded-Proto`).
+- `POST /logout` deletes the cookie → 303 `/login?signed_out=1`.
+- Middleware (renamed `AuthMiddleware`): `PUBLIC_PATHS` += `/login`, `/logout`, plus the `/static/` prefix (the page's fonts). A valid cookie, a valid Basic header (kept for curl/scripts and the existing tests) or a feed token passes. Otherwise an HTML page load → 303 `/login?next=<path+query>`; anything else → plain 401 **without** `WWW-Authenticate`, the header that triggered the popup.
+- Half-configured login: HTML page loads land on the login page rendered with `misconfigured` (500, form disabled) instead of the plain-text 500; other requests keep the plain 500.
+
+**Follow-up within the phase (UX hardening).**
+- Only `/static/fonts/` is public, not all of `/static/`, so anything added there later stays behind the login.
+- Half-configured login: `podvault serve` names the missing variable at startup, and the middleware logs the error once instead of on every request.
+- Browsers can't use Basic auth (detected by `Sec-Fetch-Site`, or a `Mozilla/` User-Agent over plain HTTP where browsers send no fetch metadata): a browser still holding Phase 23 Basic credentials goes through `/login` once, and Sign out then really signs it out. curl/scripts are unaffected.
+- A browser form POST without a session redirects to `/login?next=<same-origin Referer>` instead of the plain-text 401.
+- Sliding sessions: past half its lifetime, any request (including audio streams) renews the cookie, keeping its kind (`r`/`s`, now part of the signed value). Daily users aren't signed out at day 30, and playback isn't cut by an expiring cookie.
+- `base.html` `podvaultCheckAuth()`: job-strip polling, job cancel, the Settings preview and `<audio>` load errors redirect to the login on a 401 instead of failing silently.
+- `LoginThrottle`: per-IP lockout after 5 failed logins (form or Basic), 30 s doubling to 15 min, 429 + `Retry-After`, password not checked while locked.
+
+**UI.** `templates/login.html` is standalone (no sidebar/player), a plain POST form that works without JS; Show/Hide password and the "Signing in…" spinner are progressive enhancement. `base.html`'s sidebar footer shows `username · vX.Y.Z` and a Sign out form only when `login_enabled()`, otherwise the plain version as before (new Jinja globals `login_enabled`/`login_username`).
+
+**Mockup corrections while implementing.** The mockups said `v1.0.0`/`v1.1.0`; the app renders `app_version` everywhere. Bumped to 1.3.0. The login mockup's `next` was hardcoded to `/` (now `{{ next }}`), and its Sign out button was a submit outside any form (now wrapped in `<form method="post" action="/logout">`).
+
+**Tests:** `test_auth.py` (30 new; two Phase 23 tests adjusted: no more `WWW-Authenticate`, fonts public).
+
+**Risk:** low. Opt-in like Phase 23. Basic-auth clients keep working. Browsers that cached Basic credentials are sent to the sign-in page once. The lockout is per IP, so behind a reverse proxy a password-guessing attacker can keep not-yet-signed-in users out for up to 15 minutes at a time; signed-in browsers aren't affected.
+
+---
+
 ## Current status
 
-**Phases 0-24 complete.** Everything planned is implemented: the original web interface + Docker (0-6), configurable naming/scheduling/playback (7-9), the full visual redesign (10-18), the vault-specific features (19-21), job control + true single-episode download + archive-health surfacing (22), hardening (23: web login, non-MP3 audio, database backups), and OPML + PodVault's own podcast feeds (24). It's tested (231 automated tests: 98 before the redesign, 132 after it, 153 with the vault features, 181 with Phase 22, 213 with Phase 23, now 231 with Phase 24) and documented here and in `ARCHITECTURE.md`/`README.md`. There's no pending next step from this roadmap; any new work needs a new phase.
+**Phases 0-25 complete.** Everything planned is implemented: the original web interface + Docker (0-6), configurable naming/scheduling/playback (7-9), the full visual redesign (10-18), the vault-specific features (19-21), job control + true single-episode download + archive-health surfacing (22), hardening (23: web login, non-MP3 audio, database backups), OPML + PodVault's own podcast feeds (24), and a proper login page with sign-out (25). It's tested (261 automated tests: 98 before the redesign, 132 after it, 153 with the vault features, 181 with Phase 22, 213 with Phase 23, 231 with Phase 24, now 261 with Phase 25) and documented here and in `ARCHITECTURE.md`/`README.md`. There's no pending next step from this roadmap; any new work needs a new phase.

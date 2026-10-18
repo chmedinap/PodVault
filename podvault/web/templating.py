@@ -4,7 +4,8 @@ from pathlib import Path
 
 from fastapi.templating import Jinja2Templates
 
-from podvault import __version__
+from podvault import __version__, config
+from podvault.web.auth import login_enabled
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
@@ -49,5 +50,8 @@ def format_duration(seconds) -> str:
 
 templates.env.globals['app_version'] = __version__
 templates.env.globals['cover_gradient'] = cover_gradient
+# Callables, not values: config is read per render so tests can monkeypatch it
+templates.env.globals['login_enabled'] = login_enabled
+templates.env.globals['login_username'] = lambda: config.WEB_USERNAME or ''
 templates.env.filters['filesize'] = format_size
 templates.env.filters['duration'] = format_duration

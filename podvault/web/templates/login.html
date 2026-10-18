@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Sign in · PodVault</title>
+{#- Standalone on purpose (Fase 25): no sidebar, no player, nothing behind the login. -#}
+<style>
+  @font-face { font-family:'IBM Plex Sans'; src:url('/static/fonts/IBMPlexSans-400.woff2') format('woff2'); font-weight:400; font-style:normal; font-display:swap; }
+  @font-face { font-family:'IBM Plex Sans'; src:url('/static/fonts/IBMPlexSans-500.woff2') format('woff2'); font-weight:500; font-style:normal; font-display:swap; }
+  @font-face { font-family:'IBM Plex Sans'; src:url('/static/fonts/IBMPlexSans-600.woff2') format('woff2'); font-weight:600; font-style:normal; font-display:swap; }
+  @font-face { font-family:'IBM Plex Sans'; src:url('/static/fonts/IBMPlexSans-700.woff2') format('woff2'); font-weight:700; font-style:normal; font-display:swap; }
+  @font-face { font-family:'IBM Plex Mono'; src:url('/static/fonts/IBMPlexMono-400.woff2') format('woff2'); font-weight:400; font-style:normal; font-display:swap; }
+
+  :root {
+    --bg:#0b0d10; --panel:#14171c; --border:#1f242c; --border-strong:#262b35;
+    --text:#e9ebee; --muted:#9aa1ab; --faint:#565d68;
+    --accent:#5b8def; --accent-hover:#7aa4f5; --input-bg:#0d1014;
+    --ok:#3fb27f; --warn:#e0a13a; --err:#e0524a;
+  }
+  * { box-sizing:border-box; }
+  body {
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:'IBM Plex Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+  .mono { font-family:'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  input, button { font-family:inherit; }
+  input:-webkit-autofill { -webkit-box-shadow:0 0 0 40px var(--input-bg) inset; -webkit-text-fill-color:var(--text); caret-color:var(--text); }
+
+  .login-page { min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:32px 20px; gap:28px; }
+  .login-brand { display:flex; align-items:center; gap:11px; }
+  .brand-mark { width:34px; height:34px; border-radius:9px; background:var(--accent); display:flex; align-items:center; justify-content:center; color:var(--bg); font-weight:700; font-size:16px; font-family:'IBM Plex Mono', monospace; }
+  .brand-name { font-size:18px; font-weight:600; letter-spacing:-0.01em; }
+
+  .login-card { width:100%; max-width:380px; background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:28px; display:flex; flex-direction:column; gap:18px; }
+  .login-card h1 { margin:0; font-size:19px; font-weight:600; letter-spacing:-0.01em; }
+  .login-card p { margin:5px 0 0 0; font-size:13px; color:var(--muted); line-height:1.5; }
+
+  .notice { display:flex; gap:10px; align-items:flex-start; padding:10px 12px; border-radius:9px; font-size:12.5px; line-height:1.5; }
+  .notice-ok { background:rgba(63,178,127,0.09); border:1px solid rgba(63,178,127,0.32); color:#b6e3cd; }
+  .notice-ok .notice-icon { color:var(--ok); }
+  .notice-err { background:rgba(224,82,74,0.09); border:1px solid rgba(224,82,74,0.32); color:#f0b3ae; }
+  .notice-err .notice-icon { color:var(--err); }
+  .notice-warn { flex-direction:column; gap:7px; padding:11px 12px; background:rgba(224,161,58,0.09); border:1px solid rgba(224,161,58,0.32); color:#c9ced6; line-height:1.55; }
+  .notice-warn strong { color:var(--warn); font-weight:600; }
+  .notice-warn .mono { font-size:11.5px; color:var(--text); }
+  .notice-icon { flex-shrink:0; font-size:13px; line-height:1.45; }
+
+  .field { display:flex; flex-direction:column; gap:7px; }
+  .field-label { font-size:12px; font-weight:600; color:var(--muted); letter-spacing:0.02em; }
+  .field input { width:100%; background:var(--input-bg); border:1px solid var(--border-strong); color:var(--text); padding:11px 12px; border-radius:8px; font-size:14px; outline:none; }
+  .field input:focus { border-color:var(--accent); box-shadow:0 0 0 3px rgba(91,141,239,0.18); }
+  .field-error input { border-color:rgba(224,82,74,0.55); }
+  .field input:disabled { opacity:0.5; }
+  .password-wrap { position:relative; display:flex; }
+  .password-wrap input { padding-right:64px; }
+  .password-toggle { display:none; position:absolute; right:6px; top:50%; transform:translateY(-50%); background:transparent; border:none; color:var(--muted); font-size:12px; font-weight:500; padding:6px 8px; border-radius:6px; cursor:pointer; }
+  .js .password-toggle { display:block; }
+  .password-toggle:hover { color:var(--text); background:#1b1f26; }
+
+  .remember { display:flex; align-items:center; gap:9px; cursor:pointer; width:fit-content; font-size:13px; color:#c9ced6; }
+  .remember input { width:15px; height:15px; margin:0; accent-color:var(--accent); cursor:pointer; }
+
+  .submit { display:flex; align-items:center; justify-content:center; gap:9px; background:var(--accent); color:#0a0c10; border:none; padding:11px 16px; border-radius:8px; font-size:14px; font-weight:600; cursor:pointer; margin-top:2px; }
+  .submit:hover { background:var(--accent-hover); }
+  .submit:disabled { background:#3a4152; cursor:default; }
+  .submit:focus-visible, .password-toggle:focus-visible { outline:2px solid var(--text); outline-offset:2px; }
+  .spinner { display:none; width:13px; height:13px; border-radius:99px; border:2px solid rgba(10,12,16,0.3); border-top-color:#0a0c10; animation:spin 0.7s linear infinite; }
+  .submitting .spinner { display:inline-block; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+
+  .login-version { font-family:'IBM Plex Mono', monospace; font-size:11px; color:var(--faint); }
+</style>
+</head>
+<body>
+<div class="login-page">
+  <div class="login-brand">
+    <div class="brand-mark">P</div>
+    <div class="brand-name">PodVault</div>
+  </div>
+
+  <form class="login-card" id="login-form" method="post" action="/login">
+    <div>
+      <h1>Sign in</h1>
+      <p>Sign in to your library.</p>
+    </div>
+
+    {% if misconfigured %}
+    <div class="notice notice-warn" role="alert">
+      <strong>Login is misconfigured</strong>
+      <span>Set both <span class="mono">PODVAULT_USERNAME</span> and <span class="mono">PODVAULT_PASSWORD</span>, or neither, then restart the server.</span>
+    </div>
+    {% elif retry_after %}
+    <div class="notice notice-err" role="alert">
+      <span class="notice-icon">✕</span>
+      {%- set wait = ((retry_after + 59) // 60 ~ ' minute' ~ ('s' if retry_after > 60 else '')) if retry_after >= 60 else (retry_after ~ ' seconds') %}
+      <span>Too many failed attempts. Try again in {{ wait }}.</span>
+    </div>
+    {% elif error %}
+    <div class="notice notice-err" role="alert">
+      <span class="notice-icon">✕</span><span>Wrong username or password.</span>
+    </div>
+    {% elif signed_out %}
+    <div class="notice notice-ok" role="status">
+      <span class="notice-icon">✓</span><span>You've signed out.</span>
+    </div>
+    {% endif %}
+
+    <input type="hidden" name="next" value="{{ next }}">
+
+    <label class="field {{ 'field-error' if error else '' }}">
+      <span class="field-label">Username</span>
+      <input name="username" autocomplete="username" required value="{{ username }}"
+             {% if not username %}autofocus{% endif %} {% if misconfigured %}disabled{% endif %}>
+    </label>
+
+    <label class="field {{ 'field-error' if error else '' }}">
+      <span class="field-label">Password</span>
+      <span class="password-wrap">
+        <input name="password" id="password" type="password" autocomplete="current-password" required
+               {% if username %}autofocus{% endif %} {% if misconfigured %}disabled{% endif %}>
+        <button type="button" class="password-toggle" id="password-toggle" aria-label="Show password"
+                {% if misconfigured %}disabled{% endif %}>Show</button>
+      </span>
+    </label>
+
+    <label class="remember">
+      <input type="checkbox" name="remember" value="true" checked {% if misconfigured %}disabled{% endif %}>
+      <span>Keep me signed in for 30 days</span>
+    </label>
+
+    <button type="submit" class="submit" id="login-submit" {% if misconfigured %}disabled{% endif %}>
+      <span class="spinner" aria-hidden="true"></span><span id="login-submit-text">Sign in</span>
+    </button>
+  </form>
+
+  <div class="login-version">PodVault v{{ app_version }}</div>
+</div>
+<script>
+(function () {
+  document.documentElement.classList.add('js');
+  const password = document.getElementById('password');
+  const toggle = document.getElementById('password-toggle');
+  toggle.addEventListener('click', function () {
+    const show = password.type === 'password';
+    password.type = show ? 'text' : 'password';
+    toggle.textContent = show ? 'Hide' : 'Show';
+    toggle.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+  });
+  const form = document.getElementById('login-form');
+  const submit = document.getElementById('login-submit');
+  form.addEventListener('submit', function () {
+    submit.classList.add('submitting');
+    document.getElementById('login-submit-text').textContent = 'Signing in…';
+    // Disable after the browser has captured the form data, so the POST still goes out
+    setTimeout(function () { submit.disabled = true; }, 0);
+  });
+  // Coming back through the history cache must not leave the form stuck in "Signing in…"
+  window.addEventListener('pageshow', function () {
+    submit.classList.remove('submitting');
+    submit.disabled = {{ 'true' if misconfigured else 'false' }};
+    document.getElementById('login-submit-text').textContent = 'Sign in';
+  });
+})();
+</script>
+</body>
+</html>

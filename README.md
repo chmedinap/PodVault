@@ -340,7 +340,7 @@ By default the web interface has no login, which is fine on `127.0.0.1`. To requ
 PODVAULT_USERNAME=admin PODVAULT_PASSWORD='a-long-password' podvault serve --host 0.0.0.0
 ```
 
-Every page, action, audio stream, and export then asks for that username and password (standard browser login prompt, HTTP Basic auth). Only `/healthz`, used by Docker's health check, stays open. Setting just one of the two is treated as a mistake and every request is refused until both are set. `podvault serve` warns you if you bind to a non-local address without a login. Basic auth doesn't encrypt anything, so if PodVault is reachable from the internet, put it behind an HTTPS reverse proxy (Caddy, Traefik, nginx…).
+Every page, action, audio stream, and export then requires that login. Opening any page sends you to a **Sign in** page first, and you come back to the page you asked for afterwards. "Keep me signed in for 30 days" (on by default) keeps you signed in across browser restarts; untick it and the session ends when the browser closes, or after 12 hours at most. Either way the session renews itself while you use PodVault, so it only runs out after that long *without* using it. If it does run out, the next click or form takes you to the sign-in page and back to where you were. **Sign out** is at the bottom of the sidebar. Changing the password signs every browser out. Five wrong passwords in a row from the same address lock it out for 30 seconds, doubling with each further miss up to 15 minutes; behind a reverse proxy everyone shares the proxy's address, so a lockout there affects everyone not already signed in. Scripts and `curl` can still send the credentials as HTTP Basic auth (`curl -u admin:password …`); browsers can't, so Sign out always works (a script that pretends to be a browser with a `Mozilla/…` User-Agent has to use the sign-in page too). Only `/healthz`, used by Docker's health check, and the fonts the sign-in page needs stay open. Setting just one of the two variables is treated as a mistake: `podvault serve` says which one is missing when it starts, the sign-in page explains it, and every request is refused until both are set. `podvault serve` warns you if you bind to a non-local address without a login. The password travels unencrypted over plain HTTP, so if PodVault is reachable from the internet, put it behind an HTTPS reverse proxy (Caddy, Traefik, nginx…); the session cookie is marked `Secure` automatically when the proxy reports HTTPS (`X-Forwarded-Proto`).
 
 Starting the server also starts the auto-refresh background thread (see [Auto-Refresh Schedule](#auto-refresh-schedule)). See [Docker](#docker) to run it in a container instead.
 
@@ -501,8 +501,10 @@ pip install mutagen
 
 ### The Web Interface Keeps Asking for a Password
 
+- Check that your browser accepts cookies for PodVault's address: the sign-in is kept in a `podvault_session` cookie
+- If you changed `PODVAULT_PASSWORD` or `PODVAULT_USERNAME`, everyone has to sign in again; that's intended
 - Check that `PODVAULT_USERNAME` and `PODVAULT_PASSWORD` are set the way you think (the Settings page shows the username and whether a password is set, never the password itself)
-- If every page shows "login is misconfigured", only one of the two variables is set — set both, or neither
+- If the sign-in page says "Login is misconfigured", only one of the two variables is set — set both, or neither
 
 ## File Structure
 

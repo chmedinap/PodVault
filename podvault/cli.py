@@ -368,7 +368,12 @@ def serve(host='127.0.0.1', port=8000, reload=False):
     import uvicorn
     from podvault import config
 
-    if not (config.WEB_USERNAME and config.WEB_PASSWORD) and host not in ('127.0.0.1', 'localhost', '::1'):
+    if bool(config.WEB_USERNAME) != bool(config.WEB_PASSWORD):
+        present, missing = (('PODVAULT_USERNAME', 'PODVAULT_PASSWORD') if config.WEB_USERNAME
+                            else ('PODVAULT_PASSWORD', 'PODVAULT_USERNAME'))
+        print(f"⚠️  Login is misconfigured: {present} is set but {missing} isn't.")
+        print("   Every web request will be refused until you set both, or neither, and restart.")
+    elif not config.WEB_USERNAME and host not in ('127.0.0.1', 'localhost', '::1'):
         print(f"⚠️  The web interface is reachable from other machines on {host} and has no login.")
         print("   Set PODVAULT_USERNAME and PODVAULT_PASSWORD to require one.")
 
