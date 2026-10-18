@@ -66,11 +66,11 @@ docker run -d -p 8000:8000 -v ./data:/app/data martitoci/podvault:latest
 
 Everything else is configured with `PODVAULT_*` environment variables too — see [Configuration](#configuration) for the full list.
 
-The CLI is still available inside the container, e.g. for `migrate-layout` (deliberately not exposed in the web UI — see [File Organization](#file-organization)):
+The CLI is available inside the container too, for anything you'd rather run from a terminal:
 
 ```bash
-docker compose exec podvault podvault migrate-layout
-docker compose exec podvault podvault migrate-layout --apply
+docker compose exec podvault podvault backup
+docker compose exec podvault podvault opml-import /app/data/subscriptions.opml
 ```
 
 ## Quick Start
@@ -256,7 +256,18 @@ Both templates are plain `str.format`-style strings built from these variables: 
 
 Saving is validated against two sample episodes — one with numbers, one without — so a template that only works when a number is present (e.g. `{episode_number:03d}` with no fallback) is rejected up front rather than failing later on whichever real episode lacks one. This is also available from the web UI at `/settings`, with a live preview as you type.
 
-Changing the template only affects future downloads; it doesn't touch files you've already downloaded (see `migrate-layout` above if you want to reorganize them).
+Changing the template only affects future downloads; it doesn't touch files you've already downloaded.
+
+##### Reorganizing Files You've Already Downloaded
+
+If you change a template after downloading episodes, the older files keep the previous layout. To move them into the current one:
+
+```bash
+podvault migrate-layout           # dry run: lists what would move, changes nothing
+podvault migrate-layout --apply   # moves the files and updates the database
+```
+
+You only need this after changing a template; with the default templates there's nothing to move. The Storage page in the web UI shows the same dry-run list ("file(s) sitting outside the current naming template"), but moving the files is CLI-only on purpose: it touches real files on disk, so run the dry run first and check it before using `--apply`. In Docker: `docker compose exec podvault podvault migrate-layout`.
 
 #### Auto-Refresh Schedule
 
@@ -331,7 +342,7 @@ PODVAULT_USERNAME=admin PODVAULT_PASSWORD='a-long-password' podvault serve --hos
 
 Every page, action, audio stream, and export then asks for that username and password (standard browser login prompt, HTTP Basic auth). Only `/healthz`, used by Docker's health check, stays open. Setting just one of the two is treated as a mistake and every request is refused until both are set. `podvault serve` warns you if you bind to a non-local address without a login. Basic auth doesn't encrypt anything, so if PodVault is reachable from the internet, put it behind an HTTPS reverse proxy (Caddy, Traefik, nginx…).
 
-Starting the server also starts the auto-refresh background thread (see [Auto-Refresh Schedule](#auto-refresh-schedule)). See [Docker](#docker) to run it in a container instead. `migrate-layout --apply` is CLI-only by design — it moves real files on disk, so it's not something to trigger from a web click; the Storage page only shows the dry-run plan.
+Starting the server also starts the auto-refresh background thread (see [Auto-Refresh Schedule](#auto-refresh-schedule)). See [Docker](#docker) to run it in a container instead.
 
 Playback is web-only (there's no CLI equivalent) and only works for episodes already marked `downloaded` — it streams the local file, not the original feed URL, so an episode has to be downloaded before you can listen to it here.
 
@@ -361,12 +372,7 @@ Each episode gets its own folder named `<episode_number> - <title>` (zero-padded
 
 This is the *default* layout — both the folder path and the filename are templates you can customize; see [Naming Configuration](#naming-configuration).
 
-Already-downloaded episodes from before a layout change can be moved into the new one with:
-
-```bash
-podvault migrate-layout           # dry run: reports what would move
-podvault migrate-layout --apply   # actually moves files and updates the database
-```
+If you change the templates after downloading, see [Reorganizing Files You've Already Downloaded](#reorganizing-files-youve-already-downloaded).
 
 ### Audio Formats and Tags
 
