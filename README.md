@@ -13,6 +13,10 @@ A powerful Python application for downloading, organizing, and managing podcast 
 - 📊 **Statistics**: Track download progress and podcast statistics
 - 📁 **Organized Storage**: Episodes organized by podcast, year, and date
 - 📄 **Metadata Archive**: Saves original RSS XML metadata for each episode
+- 🌐 **Web Interface**: Browser dashboard with library, download queue, schedules, activity log, storage health, and an in-browser player
+- ⏰ **Auto-Refresh**: Per-podcast schedules that check feeds and download new episodes automatically
+- 🛡️ **Archival Safeguards**: SHA-256 integrity checks, episodes kept even after they leave the feed, and JSON export of the library inventory
+- 🐳 **Docker**: Ready-to-run `docker compose` setup with persistent data
 
 ## Installation
 
@@ -152,6 +156,13 @@ podvault download podcast_name
 podvault download-last podcast_name
 ```
 
+The download process will:
+- Show you how many episodes will be downloaded
+- Ask for confirmation before starting
+- Download episodes with a delay between each (default: 5 seconds)
+- Update ID3 tags automatically
+- Download episode and podcast images
+
 #### Verify Downloaded Files
 
 ```bash
@@ -179,13 +190,6 @@ podvault rename podcast_name <episode_id> ""
 ```
 
 The custom name is stored separately from the feed's original title, so re-processing feeds never overwrites it. If the episode hasn't been downloaded yet, the custom name is simply used the next time it is.
-
-The download process will:
-- Show you how many episodes will be downloaded
-- Ask for confirmation before starting
-- Download episodes with a delay between each (default: 5 seconds)
-- Update ID3 tags automatically
-- Download episode and podcast images
 
 #### Add a Single Feed
 
@@ -318,31 +322,40 @@ podvault status podcast_name
 
 ## Configuration
 
-You can customize the application by editing `podvault/config.py`:
+Defaults live in `podvault/config.py`. The deployment-relevant ones can be overridden with environment variables, with no need to edit the file:
+
+| Environment variable | Default | Purpose |
+|---|---|---|
+| `PODVAULT_DB_PATH` | `podvault_data.db` | Database file location |
+| `PODVAULT_DB_TIMEOUT` | `30.0` | Database timeout (seconds) |
+| `PODVAULT_DOWNLOADS_FOLDER` | `downloads` | Where episodes are saved |
+| `PODVAULT_FEEDS_FILE` | `feeds.txt` | Feed list file |
+| `PODVAULT_DEFAULT_DELAY_SECONDS` | `5` | Delay between downloads |
+| `PODVAULT_DOWNLOAD_TIMEOUT` | `30` | Download timeout (seconds) |
+| `PODVAULT_SCHEDULER_POLL_INTERVAL_SECONDS` | `300` | How often the auto-refresh thread wakes up |
+| `PODVAULT_LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` |
+| `PODVAULT_LOG_FILE` | *(unset)* | Log to this file in addition to the console |
+
+Other settings (retries, RSS cache size, filename length) are plain constants in `config.py`:
 
 ```python
-# Download settings
-DOWNLOADS_FOLDER = 'downloads'  # Where to save episodes
-DEFAULT_DELAY_SECONDS = 5        # Delay between downloads
-DOWNLOAD_TIMEOUT = 30            # Download timeout in seconds
-
-# Database settings
-DB_PATH = 'podvault_data.db'      # Database file location
-DB_TIMEOUT = 30.0                # Database timeout
-
-# Retry settings
 MAX_RETRIES = 3                  # Retry attempts for failed downloads
-RETRY_DELAY_BASE = 1             # Base delay for retries
-RETRY_DELAY_MAX = 60             # Maximum delay for retries
+RETRY_DELAY_BASE = 1             # Base delay for exponential backoff
+RETRY_DELAY_MAX = 60             # Maximum delay for exponential backoff
+RSS_CACHE_TTL_HOURS = 1          # How long fetched feeds are cached
+MAX_FILENAME_LENGTH = 200
 ```
+
+Naming templates and per-podcast schedules are stored in the database, not in `config.py`; change them with `podvault config` / `podvault schedule` or from the web UI.
 
 ## Common Tasks
 
 ### Adding a New Podcast
 
-1. Add the RSS feed URL or Apple Podcast link to `feeds.txt`
-2. Run the feed processing cell in the notebook
-3. The new podcast will be added to the database
+Either:
+
+- Run `podvault add <feed_url>` (or use the add-feed form in the web UI), which appends it to `feeds.txt` and processes it right away; or
+- Add the RSS feed URL or Apple Podcast link to `feeds.txt` yourself, then run `podvault process-feeds`
 
 ### Re-downloading Episodes
 
@@ -350,6 +363,8 @@ If you need to re-download episodes (e.g., if files were deleted):
 
 1. Run `podvault verify [podcast_name]` — it detects episodes whose file is missing on disk and marks them `missing`
 2. Run `podvault download podcast_name` (or `download-last`) — missing episodes are downloaded again automatically
+
+From the web UI you can also re-download a single episode (the ↓ button on the podcast page, or "Re-download" on the episode page), or re-download every corrupt file at once from the Storage page's Integrity check.
 
 ### Updating Episode Metadata
 
@@ -383,8 +398,8 @@ pip install mutagen
 ### Database Errors
 
 - Ensure you have write permissions in the project directory
-- Check that the database file isn't locked by another process
-- Try restarting the notebook kernel
+- Check that the database file isn't locked by another process (for example, a CLI command running while `podvault serve` is writing)
+- Make sure `PODVAULT_DB_PATH` points where you expect — in Docker it's `/app/data/podvault_data.db`, i.e. `./data/podvault_data.db` on the host
 
 ## File Structure
 
@@ -392,29 +407,33 @@ pip install mutagen
 PodVault/
 ├── README.md                 # This file
 ├── ARCHITECTURE.md           # Technical documentation
+├── ROADMAP.md                # Implementation phases and design decisions
 ├── feeds.txt                 # Your podcast feed list
-├── podvault_data.db           # SQLite database (created automatically)
+├── podvault_data.db          # SQLite database (created automatically)
 ├── downloads/                # Downloaded episodes (created automatically)
+├── data/                     # Docker volume: database, downloads, feeds.txt
+├── Dockerfile / docker-compose.yml
 ├── setup.py                  # Package setup
-└── podvault/            # Main package
-    ├── __init__.py
+├── Redesign/                 # UI design mockups
+├── tests/                    # pytest suite
+└── podvault/                 # Main package
     ├── cli.py                # Command-line interface
-    ├── config.py             # Configuration settings
-    ├── data/                 # Data collection modules
-    │   ├── collection.py     # RSS feed parsing
-    │   └── summary.py        # Statistics generation
-    ├── database/             # Database modules
-    │   ├── connection.py     # Database connections
-    │   ├── queries.py        # Query utilities
-    │   └── schema.py         # Schema management
-    └── download/              # Download modules
-        ├── downloader.py     # Main download functions
-        ├── id3_tags.py       # ID3 tag management
-        ├── metadata.py       # Metadata updates
-        └── utils.py          # Utility functions
+    ├── config.py             # Configuration (env-var overridable)
+    ├── jobs.py               # Background job runner + job control (cancel/pause/skip)
+    ├── scheduler.py          # Auto-refresh background thread
+    ├── hashing.py            # SHA-256 checksums for integrity checks
+    ├── validation.py         # Input validation
+    ├── logging_config.py     # Logging setup
+    ├── data/                 # RSS feed parsing and statistics
+    ├── database/             # Connections, schema, queries, jobs, settings, scheduling
+    ├── download/             # Downloader, ID3 tags, metadata, path/naming utilities
+    ├── services/             # Business logic shared by the CLI and web UI
+    │                         #   (feeds, downloads, episodes, queue, storage,
+    │                         #    integrity, export, playback, settings, ...)
+    └── web/                  # FastAPI app, routes, Jinja templates, static fonts
 ```
 
-**Note**: The `notebook.ipynb` file is available for developers who want to use PodVault programmatically or for advanced use cases. Most users should use the command-line interface.
+The CLI and the web interface are thin layers over `podvault/services/`. See [ARCHITECTURE.md](ARCHITECTURE.md) for details.
 
 ## Tips
 
@@ -431,7 +450,7 @@ PodVault/
 
 3. **Check Download Space**: Large podcasts can take up significant disk space. Monitor your `downloads/` folder.
 
-4. **Use Delays**: The default delay between downloads (5 seconds) helps avoid overwhelming servers. Adjust in `config.py` if needed.
+4. **Use Delays**: The default delay between downloads (5 seconds) helps avoid overwhelming servers. Adjust it with `PODVAULT_DEFAULT_DELAY_SECONDS` if needed.
 
 ## Running Tests
 

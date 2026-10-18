@@ -13,15 +13,27 @@ This document provides a detailed technical overview of the PodVault application
 7. [Error Handling](#error-handling)
 8. [Performance Considerations](#performance-considerations)
 9. [Extension Points](#extension-points)
+10. [Future Enhancements](#future-enhancements)
+11. [Testing Strategy](#testing-strategy)
+12. [Scheduler (Fase 8)](#scheduler-fase-8)
+13. [Web Player (Fase 9)](#web-player-fase-9)
+14. [Web Interface Redesign (Fases 10-18)](#web-interface-redesign-fases-10-18)
+15. [Vault Features (Fases 19-21)](#vault-features-fases-19-21)
+16. [Job Control, Single-Episode Download, and Archive Health (Fase 22)](#job-control-single-episode-download-and-archive-health-fase-22)
+17. [Deployment (Docker)](#deployment-docker)
+18. [Security Considerations](#security-considerations)
+19. [User Interfaces](#user-interfaces)
 
 ## System Overview
 
-PodVault is a modular Python application designed to:
-- Parse RSS feeds and extract podcast metadata
+PodVault is a modular Python application for *archiving* podcasts. It is designed to:
+- Parse RSS feeds (and Apple Podcast links) and extract podcast metadata
 - Store metadata in a SQLite database
-- Download podcast episodes with organized file structure
+- Download podcast episodes into a configurable, template-driven folder structure
 - Update MP3 ID3 tags with complete metadata
-- Provide statistics and management capabilities
+- Keep the archive trustworthy over time: SHA-256 integrity checks, retention of episodes that leave their feed, and a portable JSON export
+- Refresh feeds on a per-podcast schedule and run long work (syncs, downloads, scans) as controllable background jobs
+- Expose all of this through both a CLI and a server-rendered web interface
 
 ### Core Principles
 
@@ -36,56 +48,70 @@ PodVault is a modular Python application designed to:
 ### High-Level Architecture
 
 ```
-┌─────────────────┐
-│   User/CLI      │
-└────────┬─────────┘
-         │
-         ▼
-┌─────────────────────────────────────┐
-│         Application Layer           │
-│  (CLI / notebook.ipynb for devs)  │
-└────────┬────────────────────────────┘
-         │
-         ▼
-┌─────────────────────────────────────┐
-│         Business Logic Layer       │
-│  ┌──────────┐  ┌──────────┐       │
-│  │   Data   │  │ Download │       │
-│  │ Collection│  │ Operations│     │
-│  └──────────┘  └──────────┘       │
-└────────┬────────────────────────────┘
-         │
-         ▼
-┌─────────────────────────────────────┐
-│         Data Access Layer           │
-│  ┌──────────┐  ┌──────────┐       │
-│  │ Database │  │  File    │       │
-│  │  Access  │  │  System  │       │
-│  └──────────┘  └──────────┘       │
-└─────────────────────────────────────┘
+┌──────────────────────┐      ┌──────────────────────────────────┐
+│   CLI (cli.py)       │      │  Web UI (web/: FastAPI + Jinja2) │
+└──────────┬───────────┘      └───────┬──────────────────┬───────┘
+           │                          │ submits          │
+           │                          ▼                  │
+           │            ┌──────────────────────────┐     │
+           │            │ JobRunner + JobControl   │     │
+           │            │ (jobs.py)                │     │
+           │            │ Scheduler thread         │     │
+           │            │ (scheduler.py)           │     │
+           │            └────────────┬─────────────┘     │
+           ▼                         ▼                   ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                  Service Layer (services/)                      │
+│  feeds · downloads · episodes · podcasts · queue · scheduling   │
+│  storage · integrity · verification · migration · export        │
+│  playback · settings            (results.py = return types)     │
+└──────────┬───────────────────────────────┬──────────────────────┘
+           ▼                               ▼
+┌──────────────────────────┐   ┌──────────────────────────────────┐
+│ Data collection (data/)  │   │ Download operations (download/)  │
+│ RSS parsing, Apple → RSS │   │ downloader, ID3 tags, metadata,  │
+│ feed cache, statistics   │   │ naming templates, hashing.py     │
+└──────────┬───────────────┘   └───────────────┬──────────────────┘
+           ▼                                   ▼
+┌─────────────────────────────────────────────────────────────────┐
+│ Data access: database/ (SQLite: per-podcast tables, summary,    │
+│ app_settings, jobs) · file system (downloads/)                  │
+└─────────────────────────────────────────────────────────────────┘
 ```
+
+The CLI and the web routes are both thin: they validate/format and delegate to `services/`. The CLI calls services synchronously (with interactive confirmation where relevant); the web layer runs anything slow through the `JobRunner` so requests return immediately. The scheduler thread only exists under `podvault serve`.
 
 ### Module Dependencies
 
 ```
 podvault/
-├── config.py (no dependencies)
-├── cli.py → argparse, sqlite3, all other modules
+├── config.py → os (no internal dependencies)
+├── hashing.py → hashlib (leaf module, no internal dependencies)
+├── validation.py → stdlib only
+├── logging_config.py → config
+├── cli.py → argparse, services, validation; lazily uvicorn + scheduler (for serve)
+├── jobs.py → database.jobs, database.connection, ThreadPoolExecutor
+├── scheduler.py → config; lazily services.scheduling
 ├── data/
-│   ├── collection.py → config, feedparser, requests
+│   ├── collection.py → config, validation, feedparser, requests
 │   └── summary.py → pandas
 ├── database/
 │   ├── connection.py → sqlite3, config
-│   ├── queries.py → sqlite3
-│   └── schema.py → sqlite3
-└── download/
-    ├── downloader.py → requests, sqlite3, config
-    ├── id3_tags.py → mutagen, sqlite3
-    ├── metadata.py → sqlite3
-    └── utils.py → pathlib, sqlite3
+│   ├── queries.py, schema.py, transactions.py → sqlite3
+│   ├── jobs.py → job history table
+│   ├── scheduling.py → summary-table schedule columns
+│   └── settings.py → app_settings table
+├── download/
+│   ├── downloader.py → requests, database, data.collection, hashing
+│   ├── id3_tags.py → mutagen, sqlite3
+│   ├── metadata.py → sqlite3
+│   └── utils.py → pathlib, sqlite3 (naming template engine)
+├── services/ → data, database, download, validation, hashing
+└── web/
+    ├── app.py → fastapi, StaticFiles (/static)
+    ├── routes.py → services, jobs, scheduler, database.jobs
+    └── templating.py → jinja2 (+ size/duration filters)
 ```
-
-**Note**: The `notebook.ipynb` file is provided for developers who want to use PodVault programmatically or for advanced use cases. End users should use the command-line interface (`cli.py`).
 
 ## Module Structure
 
@@ -100,7 +126,7 @@ Centralized configuration management. All constants are defined here to enable e
 - Logging configuration
 - File size limits
 
-**Design Decision**: Centralized config allows for easy environment-specific configurations and future environment variable support.
+**Design Decision**: Centralized config allows for easy environment-specific configurations. Deployment-relevant values (paths, timeouts, delay, log level/file, scheduler poll interval) are read from `PODVAULT_*` environment variables via small `_env_str`/`_env_int`/`_env_float` helpers, falling back to the original hardcoded defaults — see [Deployment (Docker)](#deployment-docker) for the full list. User-facing settings that change at runtime (naming templates, per-podcast schedules) live in the database instead, not here.
 
 ### 2. Data Collection (`data/collection.py`)
 
@@ -319,6 +345,36 @@ Handles database schema evolution and migrations.
 
 Templates are `str.format` only — never `eval` or arbitrary code — and are configured globally (not per-podcast) via `services.settings.update_settings()`, which validates a candidate template against two sample episodes (one with an episode/season number, one without) before saving, so a template that only works for numbered episodes is rejected up front instead of failing later on a real episode that lacks one.
 
+### 5. Service Layer (`services/`)
+
+The single place business logic lives, shared by the CLI and the web routes (extracted from `cli.py` in Fase 0). Each module returns plain dataclasses from `services/results.py` (`PodcastInfo`, `EpisodeInfo`, `DownloadResult`, ...) rather than printing, so the same call can back a terminal command, an HTML page, or a background job. `services/__init__.py` re-exports the public functions, so callers use `services.download_all(...)`, `services.verify_files(...)`, etc.
+
+| Module | Responsibility |
+|---|---|
+| `feeds.py` | `add_feed`, `process_feeds_file`, `process_single_feed`; preserves download state and retains removed episodes across re-syncs |
+| `downloads.py` | `download_all` / `download_last` / `download_episode` (single episode), `preview_pending` |
+| `episodes.py` | List/get episodes (incl. on-demand duration + ID3 completeness), `rename_episode` |
+| `podcasts.py` | `list_podcasts`, `get_podcast_info`, `get_status` — per-podcast aggregates in one SQL query |
+| `queue.py` | `estimate_progress` — estimated speed/ETA for the Queue page |
+| `scheduling.py` | Per-podcast schedules, `run_due_checks` (called by the scheduler thread) |
+| `storage.py` | Disk usage, ID3-check/retag jobs, local-only (removed-from-feed) episodes |
+| `integrity.py` | Checksum re-verification job, `list_corrupt_episodes` |
+| `verification.py` | `verify_files` — mark episodes `missing` when their file is gone |
+| `migration.py` | `migrate_layout` — move existing files to the current naming template (dry run by default) |
+| `export.py` | JSON manifests per podcast / whole library |
+| `playback.py` | Resolve audio + cover paths for the web player |
+| `settings.py` | Naming templates: get, validate + update, preview |
+
+Every function that can run as a background job accepts `progress_callback=` and `job_control=` keyword arguments (see [Fase 22](#job-control-single-episode-download-and-archive-health-fase-22)).
+
+### 6. Jobs, Scheduler, and Web Layer
+
+- **`jobs.py`** — `JobRunner` wraps a `ThreadPoolExecutor`, persists every job (type, status, progress, message) to the `jobs` table via `database/jobs.py`, and gives each job a `JobControl` for cancel/pause/resume/skip. `get_job_runner()` returns the process-wide instance.
+- **`scheduler.py`** — one daemon thread that periodically calls `services.scheduling.run_due_checks()`; see [Scheduler (Fase 8)](#scheduler-fase-8).
+- **`web/app.py`** — builds the FastAPI app, mounts `/static` (self-hosted IBM Plex fonts), and includes the router.
+- **`web/routes.py`** — sync route handlers over the service layer; anything slow is submitted to the `JobRunner` and the handler redirects back with a toast message. Pages: Library (`/`), podcast and episode detail, Queue, Schedule, Activity, Storage, Settings, plus JSON job-status/control endpoints, audio/cover streaming, and export.
+- **`web/templating.py` + `web/templates/`** — Jinja2 environment with size/duration formatting filters; `base.html` holds the shared shell (sidebar, topbar, toast, job strip, player bar) and all CSS/JS — no SPA framework, no build step.
+
 ## Data Flow
 
 ### Feed Processing Flow
@@ -443,6 +499,19 @@ Single row (`id = 1`), global (not per-podcast) naming template configuration �
 - `id` (INTEGER, PRIMARY KEY, `CHECK (id = 1)`): Always `1` — enforces the single-row invariant at the schema level
 - `folder_template` (TEXT): See "Naming template engine" under Utilities, above
 - `filename_template` (TEXT): Same
+
+### Jobs Table
+
+One row per background job submitted through the `JobRunner` (downloads, feed syncs including scheduled ones, ID3/integrity checks) — the source for the Activity page, the Queue page, and `/jobs/{id}/status`. See `database/jobs.py`.
+
+**Columns:**
+- `id` (TEXT, PRIMARY KEY): Job UUID
+- `job_type` (TEXT): e.g. `add_feed`, `download_all`, `download_episode`, `id3_check`, `id3_retag`, `integrity_check`
+- `podcast_name` (TEXT, nullable)
+- `status` (TEXT): `pending` → `running` → `success` or `failed`
+- `progress` / `total` (INTEGER): Progress counters reported by the job's `progress_callback`
+- `message` / `error` (TEXT): Result summary (cached scan results for ID3/integrity checks) or failure details
+- `created_at` / `updated_at` (TEXT): ISO timestamps (used for Queue's estimated speed/ETA)
 
 ## Key Algorithms
 
@@ -596,20 +665,18 @@ Logs include:
 
 ### Planned Features
 
+Already shipped from earlier versions of this list: checksum validation (Fase 19), progress reporting via the job strip/Queue page (Fases 16, 22), the web interface (Fase 4 onward), scheduled downloads (Fase 8), and RSS feed response caching (`RSS_CACHE_*` in `config.py`). Still open:
+
 1. **Connection Pooling**: Reuse database connections
-2. **Resume Downloads**: Resume partial downloads
-3. **Checksum Validation**: Verify downloaded file integrity
-4. **Progress Reporting**: Real-time download progress
-5. **Web Interface**: Browser-based UI
-6. **Scheduled Downloads**: Automatic periodic updates
-7. **Episode Filtering**: Download by date range, keywords, etc.
+2. **Resume Downloads**: Resume partial downloads (and cancel mid-transfer — job control currently acts only between episodes)
+3. **Episode Filtering**: Download by date range, keywords, etc.
+4. **Byte-level progress**: Real (not estimated) speed/ETA on the Queue page
 
 ### Performance Improvements
 
 1. **Parallel Downloads**: Download multiple episodes simultaneously
-2. **Caching**: Cache RSS feed responses
-3. **Incremental Updates**: Only fetch new episodes
-4. **Database Optimization**: Query plan analysis and optimization
+2. **Incremental Updates**: Only fetch new episodes
+3. **Database Optimization**: Query plan analysis and optimization
 
 ## Testing Strategy
 
@@ -628,6 +695,13 @@ Logs include:
 - `test_scheduling_service.py` — `services.scheduling`: schedule persistence, `run_due_checks()` skips podcasts with no schedule or not yet due, re-syncs a due one and updates `last_checked_at`, submits a `download_all` job when `auto_download` is on
 - `test_scheduler.py` — the background thread itself: starts, is idempotent to call twice, stops cleanly
 - `test_playback_service.py` — `services.playback`: resolves audio/cover for a downloaded episode, respects `custom_title`, prefers episode cover over podcast cover, rejects not-yet-downloaded/missing/unknown episodes
+- `test_queue_service.py` — `services.queue.estimate_progress()` speed/ETA math and `preview_pending()`, deterministic against fake timestamps/sizes (Fase 16)
+- `test_storage_service.py` — disk-usage bucketing, largest-podcasts aggregate, and the ID3-completeness job targets (Fase 16b)
+- `test_hashing.py` — `compute_checksum()` matches `hashlib` (Fase 19)
+- `test_integrity_service.py` — `run_integrity_check()`: baseline hashing, verification, and corruption detection that preserves the last-known-good checksum (Fase 19)
+- `test_export_service.py` — `services.export` manifests, including removed-from-feed episodes and checksum state (Fase 21)
+
+181 tests in total, all runnable offline with `pytest`.
 
 Not covered (acceptable gaps for a single-user local app, per ROADMAP.md Fase 5): real network/RSS parsing, real ID3 tag writing against real MP3s, concurrent job execution.
 
@@ -710,8 +784,11 @@ Checked **only at episode boundaries**, never mid-file-transfer: `download_all_e
 | Variable | Overrides | Default |
 |---|---|---|
 | `PODVAULT_DB_PATH` | `config.DB_PATH` | `podvault_data.db` |
+| `PODVAULT_DB_TIMEOUT` | `config.DB_TIMEOUT` | `30.0` |
 | `PODVAULT_DOWNLOADS_FOLDER` | `config.DOWNLOADS_FOLDER` | `downloads` |
 | `PODVAULT_FEEDS_FILE` | `config.FEEDS_FILE` | `feeds.txt` |
+| `PODVAULT_DEFAULT_DELAY_SECONDS` | `config.DEFAULT_DELAY_SECONDS` | `5` |
+| `PODVAULT_DOWNLOAD_TIMEOUT` | `config.DOWNLOAD_TIMEOUT` | `30` |
 | `PODVAULT_LOG_LEVEL` | `config.LOG_LEVEL` | `INFO` |
 | `PODVAULT_LOG_FILE` | `config.LOG_FILE` | unset (console only) |
 | `PODVAULT_SCHEDULER_POLL_INTERVAL_SECONDS` | `config.SCHEDULER_POLL_INTERVAL_SECONDS` | `300` |
@@ -726,29 +803,23 @@ Unset, every one of these matches the original hardcoded default exactly — run
 4. **Network Security**: HTTPS for all downloads
 5. **File Permissions**: Appropriate file system permissions
 
+## User Interfaces
+
+### Command-Line Interface (`cli.py`)
+
+Covers feed processing, listing/status, downloads, verification, renaming, naming config, schedules, and `migrate-layout`. A few operations are CLI-only by design — notably `migrate-layout --apply`, which moves real files on disk and so isn't exposed as a web click. `podvault serve` starts the web interface and the scheduler thread.
+
+### Web Interface (`podvault serve`)
+
+The day-to-day interface: Library, podcast/episode detail, Queue, Schedule, Activity, Storage, and Settings, plus the in-browser player and export. Playback, job control (pause/resume/skip/cancel), integrity checks, and export are web-only.
+
+### Programmatic Use
+
+The `podvault.services` package is the stable entry point for scripting: every function returns a dataclass from `services/results.py` and never prints or prompts (pass `require_confirmation=False` to `download_all`).
+
+For user-facing documentation, see [README.md](README.md).
+
 ## Conclusion
 
 PodVault is designed with modularity, extensibility, and robustness in mind. The architecture supports easy maintenance and future enhancements while providing a solid foundation for podcast management.
-
-## User Interfaces
-
-### Command-Line Interface (Primary)
-
-The primary interface for end users is the command-line interface (`cli.py`). This provides:
-- Simple, intuitive commands
-- No programming knowledge required
-- Full access to all features
-- Clear error messages and help text
-
-### Jupyter Notebook (Developer)
-
-The `notebook.ipynb` file is provided for developers who want to:
-- Use PodVault programmatically
-- Customize workflows
-- Perform advanced data analysis
-- Integrate with other tools
-
-**Note**: End users should use the CLI. The notebook is for development and advanced use cases only.
-
-For user-facing documentation, see [README.md](README.md).
 
