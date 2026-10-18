@@ -22,6 +22,7 @@ from podvault.services.results import (
     MigrationResult,
     MissingEpisode,
     NamingPreview,
+    OpmlImportResult,
     PodcastInfo,
     PodcastListResult,
     PlaybackInfo,
@@ -47,6 +48,8 @@ from podvault.services.queue import QueueEstimate, estimate_progress
 from podvault.services.storage import get_disk_usage, list_downloaded_episodes, list_local_only_episodes, run_id3_check, run_id3_retag
 from podvault.services.integrity import list_corrupt_episodes, run_integrity_check
 from podvault.services.export import export_library_manifest, export_podcast_manifest
+from podvault.services.opml import export_opml, import_opml, parse_opml
+from podvault.services.local_feed import build_podcast_feed
 
 __all__ = [
     'AppSettings',
@@ -67,6 +70,7 @@ __all__ = [
     'PodcastListResult',
     'PlaybackInfo',
     'PodcastVerifyResult',
+    'OpmlImportResult',
     'ProcessFeedsResult',
     'RenameResult',
     'ScheduleInfo',
@@ -97,6 +101,10 @@ __all__ = [
     'run_due_checks',
     'set_podcast_schedule',
     'get_playback_info',
+    'export_opml',
+    'import_opml',
+    'parse_opml',
+    'build_podcast_feed',
     'QueueEstimate',
     'estimate_progress',
     'get_disk_usage',

@@ -19,6 +19,8 @@ A powerful Python application for downloading, organizing, and managing podcast 
 - 🛡️ **Archival Safeguards**: SHA-256 integrity checks, episodes kept even after they leave the feed, and JSON export of the library inventory
 - 💾 **Automatic Database Backups**: Daily rotating copies of the database, plus `podvault backup` on demand
 - 🔒 **Optional Login**: Username/password protection for the web interface
+- 🔁 **OPML Import/Export**: Bring your subscriptions from any podcast app, or take them with you
+- 📡 **Your Own Podcast Feeds**: Every archived podcast gets its own RSS feed, so you can listen to the archive in any podcast app — even episodes the publisher deleted
 - 🐳 **Docker**: Ready-to-run `docker compose` setup with persistent data, and a multi-arch image on Docker Hub
 
 ## Installation
@@ -208,7 +210,36 @@ The custom name is stored separately from the feed's original title, so re-proce
 podvault add https://feeds.example.com/podcast.rss
 ```
 
-This adds the feed to `feeds.txt` and processes it immediately.
+This adds the feed to `feeds.txt` (or wherever `PODVAULT_FEEDS_FILE` points) and processes it immediately.
+
+#### Import and Export OPML
+
+OPML is the standard file podcast apps use to move a subscription list around (Apple Podcasts, Overcast, Pocket Casts, AntennaPod, Podcast Addict… all export and import it).
+
+```bash
+# Add every feed from an OPML file exported by another app, and sync the new ones
+podvault opml-import subscriptions.opml
+
+# Export the library's original feeds as OPML (to a file, or omit -o to print it)
+podvault opml-export -o podvault_subscriptions.opml
+```
+
+Importing only adds feeds that aren't already in your feeds file, so importing the same file twice is harmless; folders inside the OPML are flattened, and invalid URLs are skipped and reported. Episodes aren't downloaded automatically: download them as usual, or turn on auto-download in each podcast's schedule. Both are also on the web UI's Library page (**Import** under "Add podcast", and **Export subscriptions (OPML)**).
+
+#### Your Own Podcast Feeds
+
+Every podcast in PodVault gets its own RSS feed listing the episodes you've downloaded, served from your own copies:
+
+```
+http://<your-podvault>:8000/podcasts/<podcast_name>/feed.xml
+```
+
+Subscribe to it in any podcast app to listen to your archive from your phone — including episodes the publisher has since removed from their feed. The URL is shown (with a Copy button) on each podcast's page in the web UI. **Archive feeds (OPML)** on the Library page (`/feeds.opml`) lists all of them at once, so a podcast app can subscribe to the whole archive in one import.
+
+- Only episodes whose file is actually on disk are listed; new downloads appear the next time the app refreshes the feed.
+- Podcast apps can't fill in a browser login, so when the [login](#web-login) is on, feed URLs carry an access token (`?token=...`). The token only opens the feeds and the audio/artwork they link to, never the rest of the web UI. It's derived from your password, so **changing the password revokes every feed URL handed out before** (or set your own with `PODVAULT_FEED_TOKEN`). Treat these URLs like a password.
+- Your phone must be able to reach PodVault. If it's behind a reverse proxy or a different public address, set `PODVAULT_BASE_URL` (e.g. `https://podvault.example.com`) so the links inside the feed use that address.
+- The feeds are marked `<itunes:block>` so podcast directories won't list them.
 
 #### Naming Configuration
 
@@ -385,6 +416,8 @@ Defaults live in `podvault/config.py`. The deployment-relevant ones can be overr
 | `PODVAULT_BACKUP_DIR` | `backups/` next to the database | Where backups are written |
 | `PODVAULT_BACKUP_KEEP` | `7` | How many backups to keep |
 | `PODVAULT_BACKUP_INTERVAL_HOURS` | `24` | Minimum time between automatic backups |
+| `PODVAULT_BASE_URL` | *(unset — taken from each request)* | Public address used in [your own podcast feeds](#your-own-podcast-feeds), e.g. behind a reverse proxy |
+| `PODVAULT_FEED_TOKEN` | *(derived from the password)* | Fixed access token for feed URLs when the login is on |
 
 Other settings (retries, RSS cache size, filename length) are plain constants in `config.py`:
 
@@ -404,7 +437,8 @@ Naming templates and per-podcast schedules are stored in the database, not in `c
 
 Either:
 
-- Run `podvault add <feed_url>` (or use the add-feed form in the web UI), which appends it to `feeds.txt` and processes it right away; or
+- Run `podvault add <feed_url>` (or use the add-feed form in the web UI), which appends it to `feeds.txt` and processes it right away;
+- Import an OPML file from another podcast app with `podvault opml-import <file>` (or the Import button in the web UI) — see [Import and Export OPML](#import-and-export-opml); or
 - Add the RSS feed URL or Apple Podcast link to `feeds.txt` yourself, then run `podvault process-feeds`
 
 ### Re-downloading Episodes
@@ -445,6 +479,12 @@ pip install mutagen
 - Check the file's format: tags are only written for MP3 and M4A/M4B/MP4 (see [Audio Formats and Tags](#audio-formats-and-tags))
 - Check that the audio file exists and is writable
 - Review the logs for specific error messages
+
+### A Podcast App Can't Load My PodVault Feed
+
+- Open the feed URL in your phone's browser first: if it doesn't load there, the phone can't reach PodVault (use its LAN address instead of `127.0.0.1`, or set `PODVAULT_BASE_URL` to the public address)
+- With the login on, copy the URL from the podcast's page in the web UI, including the `?token=...` part. If you changed the password since, copy it again, because the old token no longer works
+- Episodes only appear once they're downloaded
 
 ### Database Errors
 

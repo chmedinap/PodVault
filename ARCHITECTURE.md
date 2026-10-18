@@ -21,9 +21,10 @@ This document provides a detailed technical overview of the PodVault application
 15. [Vault Features (Fases 19-21)](#vault-features-fases-19-21)
 16. [Job Control, Single-Episode Download, and Archive Health (Fase 22)](#job-control-single-episode-download-and-archive-health-fase-22)
 17. [Hardening: Web Login, Audio Formats, Database Backups (Fase 23)](#hardening-web-login-audio-formats-database-backups-fase-23)
-18. [Deployment (Docker)](#deployment-docker)
-19. [Security Considerations](#security-considerations)
-20. [User Interfaces](#user-interfaces)
+18. [OPML and PodVault's Own Feeds (Fase 24)](#opml-and-podvaults-own-feeds-fase-24)
+19. [Deployment (Docker)](#deployment-docker)
+20. [Security Considerations](#security-considerations)
+21. [User Interfaces](#user-interfaces)
 
 ## System Overview
 
@@ -34,6 +35,7 @@ PodVault is a modular Python application for *archiving* podcasts. It is designe
 - Update MP3 ID3 tags with complete metadata
 - Keep the archive trustworthy over time: SHA-256 integrity checks, retention of episodes that leave their feed, a portable JSON export, and rotating database backups
 - Refresh feeds on a per-podcast schedule and run long work (syncs, downloads, scans) as controllable background jobs
+- Move subscriptions in and out via OPML, and serve the archive back as per-podcast RSS feeds any podcast app can subscribe to
 - Expose all of this through both a CLI and a server-rendered web interface
 
 ### Core Principles
@@ -368,6 +370,8 @@ The single place business logic lives, shared by the CLI and the web routes (ext
 | `export.py` | JSON manifests per podcast / whole library |
 | `playback.py` | Resolve audio + cover paths for the web player |
 | `settings.py` | Naming templates: get, validate + update, preview |
+| `opml.py` | OPML export (original feeds, or PodVault's own) and defensive OPML import |
+| `local_feed.py` | PodVault's own RSS feed per podcast, built from downloaded episodes |
 
 Every function that can run as a background job accepts `progress_callback=` and `job_control=` keyword arguments (see [Fase 22](#job-control-single-episode-download-and-archive-health-fase-22)).
 
@@ -707,8 +711,10 @@ Already shipped from earlier versions of this list: checksum validation (Fase 19
 - `test_auth.py` — the optional login: off by default, every route (pages, POSTs, static, export) challenged when on, wrong/malformed credentials rejected, `/healthz` always public, half-configured login fails closed, password never rendered (Fase 23)
 - `test_audio_formats.py` — extension from URL, existing-file reuse across extensions, `.m4a`/`.ogg` downloads, rename keeps the extension, per-format MIME on `/audio`, tag-writer dispatch (Fase 23)
 - `test_backup.py` — consistent copy, `BACKUP_DIR` override, rotation, throttling, disabled flag, backup before a re-sync, corrupt-database preservation (Fase 23)
+- `test_opml.py` — nested/case-insensitive outline parsing, DOCTYPE/size/non-OPML rejection, idempotent import that skips invalid URLs, export + round trip, web import/export, and the `PODVAULT_FEEDS_FILE` regression (Fase 24)
+- `test_local_feed.py` — only on-disk downloads listed, date ordering, enclosures resolving for URL-shaped GUIDs, base-URL override, local podcast cover, feed token (works for feed paths only, rotates with the password), archive OPML, feed URL on the podcast page (Fase 24)
 
-`isolated_env` also pins `WEB_USERNAME`/`WEB_PASSWORD`/`BACKUP_DIR`/`BACKUP_ENABLED`, so a developer's own `PODVAULT_*` environment can't change test outcomes. 213 tests in total, all runnable offline with `pytest`.
+`isolated_env` also pins `FEEDS_FILE`/`WEB_USERNAME`/`WEB_PASSWORD`/`BACKUP_DIR`/`BACKUP_ENABLED`, so a developer's own `PODVAULT_*` environment can't change test outcomes, and an autouse fixture stubs the per-download fetch of each episode's original RSS XML — before Fase 24 every test download made a real request to the fake `example.com` feed, which made the suite ~6× slower and not actually offline. 231 tests in total, all offline, ~5s.
 
 Not covered (acceptable gaps for a single-user local app, per ROADMAP.md Fase 5): real network/RSS parsing, real ID3 tag writing against real MP3s, concurrent job execution.
 
@@ -792,6 +798,18 @@ Three fixes for gaps that could cause real harm rather than inconvenience.
 
 **Database backups (`database/backup.py`).** `backup_database()` uses `sqlite3.Connection.backup()` — consistent even mid-write, unlike a file copy — into `get_backup_dir()` (`config.BACKUP_DIR`, else `backups/` beside the DB) as `<stem>-YYYYmmdd-HHMMSS.db`, then `_rotate()`s to the newest `BACKUP_KEEP`. Errors are logged, never raised. `maybe_backup_database()` adds the `BACKUP_ENABLED` switch and a `BACKUP_INTERVAL_HOURS` throttle based on the newest backup's timestamp; it's called at the start of `services.feeds.process_feeds_file()` (the path behind add/process-feeds, which rewrites tables with `to_sql(if_exists='replace')`) and on every scheduler tick. That same function used to delete a database failing `is_valid_database()` outright; `preserve_corrupt_database()` now copies it aside first as `...-corrupt.db`, which rotation never prunes. `podvault backup` forces one; `--list` lists them.
 
+## OPML and PodVault's Own Feeds (Fase 24)
+
+**OPML (`services/opml.py`).** `export_opml()` writes OPML 2.0 with one `<outline type="rss">` per podcast, from `summary.rss_feed_url`. With `own_feeds=True` and a `feed_url_for` callback it lists PodVault's own feed URLs instead; that's what `/feeds.opml` serves, so one import in a podcast app subscribes to the whole archive. `parse_opml()` walks every `outline` at any depth (apps nest feeds in folders) and matches `xmlUrl` case-insensitively. Because OPML comes from other software or the internet, it first rejects anything over 5 MB and anything with a DOCTYPE/ENTITY declaration. Real OPML never has one, and both billion-laughs and external-entity attacks need one. `import_opml()` validates each URL, appends only new ones to the feeds file, and syncs just those through `process_feed_urls()`. The web route parses once up front so a bad file gets an immediate error toast instead of a failed job, then runs the import as an `import_opml` job.
+
+**Feeds-file fix.** `config.FEEDS_FILE` (`PODVAULT_FEEDS_FILE`) was defined but never read. `add_feed`, `process_feeds_file`, and the CLI all defaulted to `'feeds.txt'` in the working directory, so in Docker the web UI's "add feed" wrote `/app/feeds.txt`, outside the `/app/data` volume, and the list vanished on the next image rebuild. `services/feeds.py` now defaults to `config.FEEDS_FILE` and gained `read_feeds_file()`, `append_to_feeds_file()`, and `process_feed_urls()`. The last one is the body of `process_feeds_file()` (corrupt-DB handling, backup, per-URL sync) extracted so the OPML import can sync only the URLs it added.
+
+**Own feeds (`services/local_feed.py`).** `build_podcast_feed(name, urls)` emits RSS 2.0 with the iTunes and Atom namespaces. Items are the podcast's `downloaded` episodes whose `Saved_Path` still exists, since an enclosure that 404s makes many apps flag the whole feed. They're sorted newest-first in Python on the parsed date: `ORDER BY published` sorts RFC 822 strings alphabetically, which is wrong, and the rest of the app has the same quirk. Each item has the original GUID (`isPermaLink="false"`, so apps that already know the episode match it), RFC 822 `pubDate`, `enclosure` with length and per-format type, `itunes:episode`/`season`, and episode art when there's episode-specific art. The channel image prefers the local `podcast_image.*`, falling back to the remote URL. The feed sets `itunes:block` so directories don't list a private archive. There's no `itunes:duration`, because reading every file's header on each fetch doesn't scale. The service doesn't build URLs. The web layer passes a `FeedUrls` of callbacks, because only it knows the public base (`PODVAULT_BASE_URL`, else the request's) and the token.
+
+**Routes.** `GET /podcasts/{name}/feed.xml`, `/podcasts/{name}/feed/audio?id=`, `/podcasts/{name}/feed/cover[?id=]`, and `/feeds.opml`. The episode id is a query parameter, not a path segment. Feed GUIDs are very often URLs (`https://example.com/?p=123`), and Starlette routes on the *decoded* path, so an encoded `/` inside `{episode_id}` can't match. The older `/episodes/{episode_id}/...` routes still have that limitation.
+
+**Feed token (`web/auth.py`).** Podcast apps can't complete a browser Basic-auth prompt reliably, and many don't send credentials on enclosure requests at all. So when the login is on, `feed_token()` is `PODVAULT_FEED_TOKEN`, or else `HMAC-SHA256(password, "podvault-feed-v1")[:32]`. Deriving it from the password means rotating the password revokes every feed URL handed out, with no token table to manage. The middleware accepts `?token=` (constant-time compare) only for GET/HEAD on paths matching `_FEED_PATH`; tests check that the token opens nothing else, including the podcast's HTML page, `/export`, and POSTs. The token sits in feed URLs, so it can end up in proxy logs and app sync services, which is why it grants read access to the feeds only.
+
 ## Deployment (Docker)
 
 `Dockerfile` builds a single `python:3.11-slim` image running `podvault serve --host 0.0.0.0`; `docker-compose.yml` maps one host directory (`./data`) onto `/app/data` in the container. There's no separate worker container — the same in-process `JobRunner` (Fase 0) that backs local usage runs inside the single container, which is enough for a single-user app with at most a couple of concurrent downloads.
@@ -814,6 +832,8 @@ Three fixes for gaps that could cause real harm rather than inconvenience.
 | `PODVAULT_BACKUP_DIR` | `config.BACKUP_DIR` | unset (`backups/` next to the DB → `/app/data/backups`) |
 | `PODVAULT_BACKUP_KEEP` | `config.BACKUP_KEEP` | `7` |
 | `PODVAULT_BACKUP_INTERVAL_HOURS` | `config.BACKUP_INTERVAL_HOURS` | `24` |
+| `PODVAULT_BASE_URL` | `config.BASE_URL` | unset (taken from each request) |
+| `PODVAULT_FEED_TOKEN` | `config.FEED_TOKEN` | unset (derived from the password) |
 
 The `HEALTHCHECK` polls the unauthenticated `/healthz`. A multi-arch image (linux/amd64 + linux/arm64) is published as `martitoci/podvault`, built with `docker buildx build --platform linux/amd64,linux/arm64 ... --push` — the Dockerfile itself is architecture-neutral.
 
@@ -825,8 +845,10 @@ Unset, every one of these matches the original hardcoded default exactly — run
 2. **File Path Safety**: Prevents directory traversal attacks (naming templates drop `.`/`..` segments; redirects only to local paths)
 3. **SQL Injection Prevention**: Parameterized queries; table names go through `validate_and_quote_table_name()`
 4. **Web Access**: Optional HTTP Basic login for every route (Fase 23); off by default, so anyone who can reach the port has full control unless it's set. Basic auth isn't encrypted — use an HTTPS reverse proxy beyond a trusted network
-5. **Secrets**: The password is never logged or rendered (the Settings page shows only whether it's set)
-6. **File Permissions**: Appropriate file system permissions
+5. **Feed tokens**: PodVault's own feeds (Fase 24) accept a `?token=` instead of the login, for podcast apps. The token is read-only and scoped to feed/audio/artwork GETs, rotates with the password, and travels in URLs, so treat feed URLs as secrets
+6. **Untrusted OPML**: Size-capped, and DOCTYPE/ENTITY declarations rejected before parsing
+7. **Secrets**: The password is never logged or rendered (the Settings page shows only whether it's set)
+8. **File Permissions**: Appropriate file system permissions
 
 ## User Interfaces
 

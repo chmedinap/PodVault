@@ -35,6 +35,39 @@ class ProcessFeedsResult:
 
 
 @dataclass
+class OpmlImportResult:
+    """Outcome of importing an OPML file (Fase 24)."""
+    found: int = 0                                     # outlines with an xmlUrl
+    added: List[str] = field(default_factory=list)     # new URLs appended to the feeds file
+    already_listed: int = 0                            # valid URLs that were already in the feeds file
+    invalid: List[str] = field(default_factory=list)   # "title: reason" for rejected URLs
+    feeds: List[FeedResult] = field(default_factory=list)  # sync results for the added feeds
+    error: Optional[str] = None
+
+    @property
+    def success(self) -> bool:
+        return self.error is None
+
+    @property
+    def synced(self) -> int:
+        return sum(1 for f in self.feeds if f.success)
+
+    def __str__(self) -> str:
+        """Human-readable job message (JobRunner stores `str(result)` on success)."""
+        if self.error:
+            return self.error
+        parts = [f"{len(self.added)} new podcast(s) added ({self.synced} synced)"]
+        if self.already_listed:
+            parts.append(f"{self.already_listed} already in the library")
+        if self.invalid:
+            parts.append(f"{len(self.invalid)} invalid URL(s) skipped")
+        failed = len(self.feeds) - self.synced
+        if failed:
+            parts.append(f"{failed} failed to sync")
+        return ", ".join(parts)
+
+
+@dataclass
 class PodcastInfo:
     name: str
     display_name: Optional[str] = None

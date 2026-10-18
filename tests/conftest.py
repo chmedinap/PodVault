@@ -15,12 +15,21 @@ import podvault.jobs as jobs_module
 from podvault import config
 
 
+@pytest.fixture(autouse=True)
+def no_episode_xml_fetch(monkeypatch):
+    """Downloads also fetch the feed to archive each episode's original XML;
+    with the fake example.com feeds used here that was a real (slow, failing)
+    network request per download. Stub it out so the suite stays offline."""
+    monkeypatch.setattr('podvault.download.downloader.get_episode_xml_from_rss', lambda *a, **k: None)
+
+
 @pytest.fixture
 def isolated_env(tmp_path, monkeypatch):
     """Point the app at a throwaway DB/downloads folder and cwd, per test."""
     monkeypatch.setattr(config, 'DB_PATH', str(tmp_path / 'test_podcast_data.db'))
     monkeypatch.setattr(config, 'DOWNLOADS_FOLDER', str(tmp_path / 'downloads'))
     monkeypatch.setattr(config, 'DEFAULT_DELAY_SECONDS', 0)
+    monkeypatch.setattr(config, 'FEEDS_FILE', str(tmp_path / 'feeds.txt'))
     # Don't inherit a developer's PODVAULT_USERNAME/PASSWORD/BACKUP_DIR from the environment
     monkeypatch.setattr(config, 'WEB_USERNAME', None)
     monkeypatch.setattr(config, 'WEB_PASSWORD', None)

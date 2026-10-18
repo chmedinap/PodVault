@@ -39,6 +39,14 @@
       </form>
       <a href="/podcasts/{{ podcast_name }}/export" class="secondary" style="text-decoration:none;">Export</a>
     </div>
+    <div style="font-size:12px;">
+      <label for="own-feed-url" class="muted">PodVault feed — subscribe in any podcast app to listen to the downloaded episodes:</label>
+      <div class="row" style="gap:6px; margin-top:4px; flex-wrap:nowrap;">
+        <input id="own-feed-url" class="mono" type="text" readonly value="{{ own_feed_url }}" onclick="this.select()" style="flex:1; min-width:0; font-size:11.5px;">
+        <button type="button" class="secondary btn-sm" aria-label="Copy feed URL"
+                onclick="var i=document.getElementById('own-feed-url'); i.select(); (navigator.clipboard ? navigator.clipboard.writeText(i.value) : Promise.reject()).then(function(){ this.textContent='Copied'; }.bind(this), function(){ document.execCommand('copy'); });">Copy</button>
+      </div>
+    </div>
   </div>
 
   <div class="card" style="width:262px; flex-shrink:0; margin-bottom:0;">

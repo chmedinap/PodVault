@@ -47,6 +47,15 @@ BACKUP_INTERVAL_HOURS = _env_float('PODVAULT_BACKUP_INTERVAL_HOURS', 24)  # min 
 WEB_USERNAME = os.environ.get('PODVAULT_USERNAME')
 WEB_PASSWORD = os.environ.get('PODVAULT_PASSWORD')
 
+# PodVault's own podcast feeds (Fase 24 — see services/local_feed.py)
+# Public address podcast apps should use, e.g. "https://podvault.example.com"
+# (needed behind a reverse proxy; unset = derived from each request).
+BASE_URL = os.environ.get('PODVAULT_BASE_URL')
+# Access token for feed URLs when the login is on (apps can't do the browser
+# login). Unset = derived from PODVAULT_PASSWORD, so changing the password
+# also revokes every feed URL handed out before.
+FEED_TOKEN = os.environ.get('PODVAULT_FEED_TOKEN')
+
 # Download Configuration
 DOWNLOADS_FOLDER = _env_str('PODVAULT_DOWNLOADS_FOLDER', 'downloads')
 DEFAULT_DELAY_SECONDS = _env_int('PODVAULT_DEFAULT_DELAY_SECONDS', 5)

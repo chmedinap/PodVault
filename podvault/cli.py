@@ -8,13 +8,14 @@ duplicating it here.
 
 import argparse
 import sys
+from pathlib import Path
 
 from podvault import services
 from podvault.download.utils import TEMPLATE_VARIABLES
 from podvault.validation import validate_file_path
 
 
-def process_feeds_file(feeds_file='feeds.txt'):
+def process_feeds_file(feeds_file=None):
     """Process all feeds from a feeds file and print a human-readable report."""
     result = services.process_feeds_file(feeds_file)
 
@@ -118,7 +119,7 @@ def download_episodes(podcast_name, last_only=False):
 
 
 def add_feed(feed_url):
-    """Add a single feed to feeds.txt and process it."""
+    """Add a single feed to the feeds file and process it."""
     result = services.add_feed(feed_url)
 
     if result.error:
@@ -300,6 +301,47 @@ def show_schedule(podcast_name, interval_hours=None, disable=False, auto_downloa
     return True
 
 
+def opml_export(output=None):
+    """Write the library's original feed subscriptions as OPML, to a file or stdout."""
+    from podvault.services.opml import export_opml
+
+    document = export_opml()
+    if output:
+        Path(output).write_text(document, encoding='utf-8')
+        print(f"✅ Subscriptions exported to {output}")
+    else:
+        sys.stdout.write(document)
+    return True
+
+
+def opml_import(path):
+    """Add every new feed from an OPML file (exported by another podcast app) and sync it."""
+    from podvault.services.opml import MAX_OPML_BYTES, import_opml
+
+    file_path = Path(path)
+    if not file_path.is_file():
+        print(f"❌ File not found: {path}")
+        return False
+    with open(file_path, 'rb') as f:
+        content = f.read(MAX_OPML_BYTES + 1)
+
+    print(f"📥 Importing feeds from {path}...")
+    result = import_opml(content)
+    if result.error:
+        print(f"❌ {result.error}")
+        return False
+
+    for feed in result.feeds:
+        if feed.success:
+            print(f"  ✅ {feed.podcast_name} ({feed.episodes_found} episodes)")
+        else:
+            print(f"  ❌ {feed.feed_url}: {feed.error}")
+    for line in result.invalid:
+        print(f"  ⚠️  Skipped {line}")
+    print(f"\n{result}")
+    return True
+
+
 def backup_database(list_only=False):
     """Back up the database now (ignoring the automatic-backup throttle), or list existing backups."""
     from podvault import config
@@ -373,7 +415,7 @@ Examples:
 
     # Process feeds command
     process_parser = subparsers.add_parser('process-feeds', help='Process all feeds from feeds.txt')
-    process_parser.add_argument('--file', default='feeds.txt', help='Feeds file path (default: feeds.txt)')
+    process_parser.add_argument('--file', default=None, help='Feeds file path (default: PODVAULT_FEEDS_FILE, i.e. feeds.txt)')
 
     # List podcasts command
     subparsers.add_parser('list', help='List all podcasts in database')
@@ -424,6 +466,12 @@ Examples:
     serve_parser.add_argument('--port', type=int, default=8000, help='Port to bind to (default: 8000)')
     serve_parser.add_argument('--reload', action='store_true', help='Auto-reload on code changes (development only)')
 
+    # OPML commands
+    opml_export_parser = subparsers.add_parser('opml-export', help='Export the original feed subscriptions as OPML')
+    opml_export_parser.add_argument('-o', '--output', help='File to write (default: print to stdout)')
+    opml_import_parser = subparsers.add_parser('opml-import', help='Import feeds from an OPML file and sync the new ones')
+    opml_import_parser.add_argument('file', help='OPML file exported from another podcast app')
+
     # Backup command
     backup_parser = subparsers.add_parser('backup', help='Back up the database now, or list existing backups')
     backup_parser.add_argument('--list', action='store_true', help='Only list existing backups')
@@ -457,7 +505,7 @@ Examples:
     try:
         if args.command == 'process-feeds':
             # Validate file path argument
-            is_valid, error = validate_file_path(args.file)
+            is_valid, error = validate_file_path(args.file) if args.file else (True, None)
             if not is_valid:
                 print(f"❌ Invalid file path '{args.file}': {error}")
                 return 1
@@ -482,6 +530,10 @@ Examples:
             success = rename_episode(args.podcast, args.episode_id, args.title)
         elif args.command == 'serve':
             success = serve(host=args.host, port=args.port, reload=args.reload)
+        elif args.command == 'opml-export':
+            success = opml_export(args.output)
+        elif args.command == 'opml-import':
+            success = opml_import(args.file)
         elif args.command == 'backup':
             success = backup_database(list_only=args.list)
         elif args.command == 'config':

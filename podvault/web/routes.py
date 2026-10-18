@@ -15,10 +15,10 @@ inline and redirect back with a status message.
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
-from urllib.parse import quote
+from urllib.parse import quote, urlencode
 
-from fastapi import APIRouter, Form, HTTPException, Request
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
+from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
 
 from podvault import config, scheduler, services
 from podvault.database import jobs as jobs_db
@@ -27,7 +27,9 @@ from podvault.database.connection import get_db_connection
 from podvault.database.queries import mark_episodes_missing, table_exists
 from podvault.download.utils import AUDIO_MIME_TYPES, TEMPLATE_VARIABLES
 from podvault.jobs import get_job_runner
+from podvault.services import local_feed, opml
 from podvault.services.scheduling import INTERVAL_CHOICES_HOURS
+from podvault.web.auth import feed_token
 from podvault.web.templating import format_duration, format_size, templates
 
 router = APIRouter()
@@ -138,6 +140,30 @@ def _redirect_with_message(
     separator = '&' if '?' in url else '?'
     query = '&'.join(f"{k}={quote(str(v))}" for k, v in params.items())
     return RedirectResponse(url=f"{url}{separator}{query}", status_code=303)
+
+
+def _public_base_url(request: Request) -> str:
+    """Base URL podcast apps should use: PODVAULT_BASE_URL if set (reverse proxy), else this request's."""
+    return (config.BASE_URL or str(request.base_url)).rstrip('/')
+
+
+def _feed_url_builders(request: Request) -> local_feed.FeedUrls:
+    """Absolute URLs for PodVault's own feeds, carrying the feed token when a login is on (Fase 24)."""
+    base = _public_base_url(request)
+    token = feed_token()
+
+    def url(path: str, **params) -> str:
+        if token:
+            params['token'] = token
+        return f"{base}{path}" + (f"?{urlencode(params)}" if params else '')
+
+    return local_feed.FeedUrls(
+        feed=lambda name: url(f"/podcasts/{quote(name)}/feed.xml"),
+        page=lambda name: f"{base}/podcasts/{quote(name)}",
+        audio=lambda name, episode_id: url(f"/podcasts/{quote(name)}/feed/audio", id=episode_id),
+        episode_cover=lambda name, episode_id: url(f"/podcasts/{quote(name)}/feed/cover", id=episode_id),
+        podcast_cover=lambda name: url(f"/podcasts/{quote(name)}/feed/cover"),
+    )
 
 
 def _safe_redirect_target(path: Optional[str], default: str) -> str:
@@ -253,6 +279,7 @@ def podcast_detail(
         "pending_count": pending_count,
         "estimated_size": estimated_size,
         "estimated_time": estimated_time,
+        "own_feed_url": _feed_url_builders(request).feed(name),
         "active_nav": "library",
         "msg": msg,
         "ok": ok == '1',
@@ -618,10 +645,7 @@ def episode_audio(name: str, episode_id: str):
     info = services.get_playback_info(name, episode_id)
     if not info.success:
         raise HTTPException(status_code=404, detail=info.error)
-    # FileResponse handles Range requests, so the browser can seek without
-    # downloading the whole file first.
-    media_type = AUDIO_MIME_TYPES.get(Path(info.audio_path).suffix.lower(), "application/octet-stream")
-    return FileResponse(info.audio_path, media_type=media_type, filename=Path(info.audio_path).name)
+    return _audio_response(info.audio_path)
 
 
 @router.get("/podcasts/{name}/episodes/{episode_id}/cover")
@@ -630,6 +654,78 @@ def episode_cover(name: str, episode_id: str):
     if not info.success or not info.cover_path:
         raise HTTPException(status_code=404, detail="No cover image available")
     return FileResponse(info.cover_path)
+
+
+def _audio_response(audio_path: str) -> FileResponse:
+    # FileResponse handles Range requests, so players can seek without
+    # downloading the whole file first.
+    media_type = AUDIO_MIME_TYPES.get(Path(audio_path).suffix.lower(), "application/octet-stream")
+    return FileResponse(audio_path, media_type=media_type, filename=Path(audio_path).name)
+
+
+# --- PodVault's own podcast feeds (Fase 24) ---------------------------------
+# Episode ids travel as `?id=` rather than in the path: feed GUIDs are often
+# URLs, and a "/" can't be routed inside a path segment.
+
+@router.get("/podcasts/{name}/feed.xml")
+def own_podcast_feed(request: Request, name: str):
+    xml = local_feed.build_podcast_feed(name, _feed_url_builders(request))
+    if xml is None:
+        raise HTTPException(status_code=404, detail=f"Podcast '{name}' not found")
+    return Response(xml, media_type="application/rss+xml; charset=utf-8")
+
+
+@router.get("/podcasts/{name}/feed/audio")
+def own_feed_audio(name: str, id: str):
+    info = services.get_playback_info(name, id)
+    if not info.success:
+        raise HTTPException(status_code=404, detail=info.error)
+    return _audio_response(info.audio_path)
+
+
+@router.get("/podcasts/{name}/feed/cover")
+def own_feed_cover(name: str, id: Optional[str] = None):
+    if id is not None:
+        info = services.get_playback_info(name, id)
+        if info.success and info.cover_path:
+            return FileResponse(info.cover_path)
+        raise HTTPException(status_code=404, detail="No cover image available")
+    cover = local_feed.podcast_cover_path(name)
+    if cover is None:
+        raise HTTPException(status_code=404, detail="No cover image available")
+    return FileResponse(str(cover))
+
+
+@router.get("/feeds.opml")
+def own_feeds_opml(request: Request):
+    """OPML of every podcast's PodVault feed — import it into a podcast app to subscribe to the whole archive."""
+    builders = _feed_url_builders(request)
+    return Response(opml.export_opml(own_feeds=True, feed_url_for=builders.feed),
+                    media_type="text/x-opml; charset=utf-8",
+                    headers={"Content-Disposition": 'inline; filename="podvault_archive.opml"'})
+
+
+# --- OPML import/export of the original subscriptions (Fase 24) -------------
+
+@router.get("/export/opml")
+def export_subscriptions_opml():
+    return Response(opml.export_opml(), media_type="text/x-opml; charset=utf-8",
+                    headers={"Content-Disposition": 'attachment; filename="podvault_subscriptions.opml"'})
+
+
+@router.post("/import/opml")
+def import_subscriptions_opml(opml_file: UploadFile = File(...)):
+    content = opml_file.file.read(opml.MAX_OPML_BYTES + 1)
+    parsed = opml.parse_opml(content)  # validate up front so a bad file gets an immediate message
+    if parsed.error:
+        return _redirect_with_message("/", parsed.error, ok=False)
+    if not parsed.outlines:
+        return _redirect_with_message("/", "No podcast feeds found in this OPML file.", ok=False)
+    job_id = get_job_runner().submit("import_opml", opml.import_opml, content)
+    return _redirect_with_message(
+        "/", f"Importing {len(parsed.outlines)} feed(s) from {opml_file.filename or 'OPML'}…",
+        ok=True, job_id=job_id, action_label="View activity", action_url="/activity",
+    )
 
 
 @router.get("/settings", response_class=HTMLResponse)
@@ -649,6 +745,8 @@ def settings_page(request: Request, msg: Optional[str] = None, ok: Optional[str]
         {'k': 'PODVAULT_USERNAME', 'v': config.WEB_USERNAME or 'not set (login disabled)'},
         # Never echo the password itself, only whether one is configured
         {'k': 'PODVAULT_PASSWORD', 'v': 'set' if config.WEB_PASSWORD else 'not set'},
+        {'k': 'PODVAULT_BASE_URL', 'v': config.BASE_URL or 'not set (taken from each request)'},
+        {'k': 'PODVAULT_FEED_TOKEN', 'v': 'set' if config.FEED_TOKEN else ('derived from password' if config.WEB_PASSWORD else 'not needed (no login)')},
         {'k': 'PODVAULT_BACKUP_ENABLED', 'v': 'yes' if config.BACKUP_ENABLED else 'no'},
         {'k': 'PODVAULT_BACKUP_DIR', 'v': str(get_backup_dir())},
         {'k': 'PODVAULT_BACKUP_KEEP', 'v': str(config.BACKUP_KEEP)},

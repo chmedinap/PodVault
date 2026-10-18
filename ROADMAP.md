@@ -440,6 +440,33 @@ Added at the user's request: three features aimed specifically at the app's role
 
 ---
 
+## Phase 24 — OPML import/export and PodVault's own podcast feeds ✅ IMPLEMENTED
+
+**Goal:** two features from the post-Phase-22 review: moving subscriptions in and out with the format every podcast app speaks, and letting podcast apps play the archive itself, including episodes the publisher deleted (Phase 20).
+
+**OPML (`services/opml.py`).**
+- Export the original subscriptions (`GET /export/opml`, `podvault opml-export [-o file]`) and import another app's export (`POST /import/opml` as an `import_opml` job, `podvault opml-import file`).
+- Import is idempotent: only URLs not already in the feeds file are added and synced, invalid ones are skipped and reported, nested folders are flattened.
+- Defensive parsing: 5 MB cap and DOCTYPE/ENTITY rejected before ElementTree sees the bytes.
+
+**Own feeds (`services/local_feed.py`).**
+- `GET /podcasts/{name}/feed.xml`: RSS 2.0 + iTunes namespace, downloaded on-disk episodes only, original GUIDs, enclosures served from PodVault (`/feed/audio?id=`), local artwork (`/feed/cover`), `itunes:block`. `GET /feeds.opml` lists every podcast's feed for a one-step subscribe.
+- Episode ids are query parameters because GUIDs are often URLs, and a `/` can't be routed in a path segment.
+- With the login on, feed URLs carry a `?token=`: `PODVAULT_FEED_TOKEN` or an HMAC of the password, so changing the password revokes old URLs. It's accepted only for GET/HEAD on feed paths.
+- `PODVAULT_BASE_URL` sets the public address used in feed links (reverse proxies).
+- UI: the podcast page shows the feed URL with a Copy button; the Library's "Add podcast" card gained OPML Import, "Export subscriptions (OPML)", and "Archive feeds (OPML)".
+
+**Fixes found along the way.**
+- `PODVAULT_FEEDS_FILE` was never read: everything defaulted to `'feeds.txt'` in the cwd, so in Docker the web UI wrote outside the data volume and the feed list was lost on rebuild. Now honoured everywhere (`read_feeds_file`/`append_to_feeds_file`/`process_feed_urls` in `services/feeds.py`).
+- Feed items are sorted by parsed date: SQL `ORDER BY published` sorts RFC 822 strings alphabetically.
+- Test suite: every test download made a real HTTP request (fetching the episode's original RSS XML from the fake `example.com` feed). An autouse fixture now stubs it, taking the suite from ~25s to ~5s and making it actually offline.
+
+**Tests:** `test_opml.py`, `test_local_feed.py` (18 new). Also checked by hand: `feedparser` parses a generated feed cleanly (`bozo` False) with accented titles, URL-shaped GUIDs, HTML summaries, and tokenized enclosures.
+
+**Risk:** low. Additive routes and services. The feeds-file change only alters behaviour where `PODVAULT_FEEDS_FILE` was set (Docker), which is the fix. Feed tokens expose read-only audio access to anyone holding a feed URL, by design.
+
+---
+
 ## Current status
 
-**Phases 0-23 complete.** Everything planned — the original web interface + Docker (0-6), configurable naming/scheduling/playback (7-9), the full visual redesign (10-18), the vault-specific features (19-21), job control + true single-episode download + archive-health surfacing (22), and hardening (23: web login, non-MP3 audio, database backups) — is implemented, tested (213 automated tests — it started at 98 before the redesign, 132 after it, 153 with the vault features, 181 with Phase 22, now 213 with Phase 23), and documented here and in `ARCHITECTURE.md`/`README.md`. There's no pending next step from this roadmap — any new work needs a new phase.
+**Phases 0-24 complete.** Everything planned is implemented: the original web interface + Docker (0-6), configurable naming/scheduling/playback (7-9), the full visual redesign (10-18), the vault-specific features (19-21), job control + true single-episode download + archive-health surfacing (22), hardening (23: web login, non-MP3 audio, database backups), and OPML + PodVault's own podcast feeds (24). It's tested (231 automated tests: 98 before the redesign, 132 after it, 153 with the vault features, 181 with Phase 22, 213 with Phase 23, now 231 with Phase 24) and documented here and in `ARCHITECTURE.md`/`README.md`. There's no pending next step from this roadmap; any new work needs a new phase.

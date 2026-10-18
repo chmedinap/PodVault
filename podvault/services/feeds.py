@@ -1,5 +1,10 @@
 """
-Service layer for feed ingestion (add a feed / process feeds.txt).
+Service layer for feed ingestion (add a feed / process the feeds file).
+
+The feeds file defaults to `config.FEEDS_FILE` (`PODVAULT_FEEDS_FILE`) —
+before Fase 24 every caller hardcoded `'feeds.txt'` relative to the
+working directory, so in Docker the web UI's "add feed" wrote outside the
+`/app/data` volume and the list was lost on every image rebuild.
 
 Extracted from cli.py so the same logic can be triggered from a web
 handler or a background job, not just the argparse entry point.
@@ -7,7 +12,7 @@ handler or a background job, not just the argparse entry point.
 
 import os
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Callable, List, Optional
 
 import pandas as pd
 
@@ -159,23 +164,35 @@ def process_single_feed(conn, feed_url: str) -> FeedResult:
         return FeedResult(feed_url=feed_url, success=False, error=str(e))
 
 
-def process_feeds_file(feeds_file: str = 'feeds.txt', progress_callback: Optional[ProgressCallback] = None) -> ProcessFeedsResult:
-    """Process every feed URL listed in `feeds_file`, one at a time."""
-    is_valid, error = validate_file_path(feeds_file)
-    if not is_valid:
-        return ProcessFeedsResult(error=f"Invalid file path '{feeds_file}': {error}")
-
-    feeds_path = Path(feeds_file)
+def read_feeds_file(feeds_file: Optional[str] = None) -> List[str]:
+    """Feed URLs listed in `feeds_file` (default `config.FEEDS_FILE`), skipping blanks and `#` comments."""
+    feeds_path = Path(feeds_file or config.FEEDS_FILE)
     if not feeds_path.exists():
-        return ProcessFeedsResult(error=f"{feeds_file} not found")
-
+        return []
     with open(feeds_path, 'r', encoding='utf-8') as f:
         lines = [line.strip() for line in f.readlines()]
-    feed_urls = [line for line in lines if line and not line.startswith('#')]
+    return [line for line in lines if line and not line.startswith('#')]
 
-    if not feed_urls:
-        return ProcessFeedsResult(error=f"No feeds found in {feeds_file}")
 
+def append_to_feeds_file(feed_urls: List[str], feeds_file: Optional[str] = None) -> List[str]:
+    """Append whichever of `feed_urls` aren't already listed; returns the ones actually added."""
+    feeds_path = Path(feeds_file or config.FEEDS_FILE)
+    existing = set(read_feeds_file(str(feeds_path)))
+    new_urls = []
+    for url in feed_urls:
+        if url not in existing and url not in new_urls:
+            new_urls.append(url)
+    if not new_urls:
+        return []
+    feeds_path.parent.mkdir(parents=True, exist_ok=True)
+    prefix = '\n' if feeds_path.exists() and feeds_path.stat().st_size > 0 else ''
+    with open(feeds_path, 'a', encoding='utf-8') as f:
+        f.write(prefix + ''.join(f"{url}\n" for url in new_urls))
+    return new_urls
+
+
+def process_feed_urls(feed_urls: List[str], progress_callback: Optional[ProgressCallback] = None) -> ProcessFeedsResult:
+    """Sync each of `feed_urls` into the database, one at a time (backing the database up first)."""
     db_path = config.DB_PATH
     if os.path.exists(db_path) and not is_valid_database(db_path):
         logger.warning(f"Database {db_path} is corrupted. Recreating it.")
@@ -201,9 +218,27 @@ def process_feeds_file(feeds_file: str = 'feeds.txt', progress_callback: Optiona
     return ProcessFeedsResult(feeds=results)
 
 
+def process_feeds_file(feeds_file: Optional[str] = None, progress_callback: Optional[ProgressCallback] = None) -> ProcessFeedsResult:
+    """Process every feed URL listed in `feeds_file` (default `config.FEEDS_FILE`), one at a time."""
+    feeds_file = feeds_file or config.FEEDS_FILE
+    is_valid, error = validate_file_path(feeds_file)
+    if not is_valid:
+        return ProcessFeedsResult(error=f"Invalid file path '{feeds_file}': {error}")
+
+    feeds_path = Path(feeds_file)
+    if not feeds_path.exists():
+        return ProcessFeedsResult(error=f"{feeds_file} not found")
+
+    feed_urls = read_feeds_file(feeds_file)
+    if not feed_urls:
+        return ProcessFeedsResult(error=f"No feeds found in {feeds_file}")
+
+    return process_feed_urls(feed_urls, progress_callback=progress_callback)
+
+
 def add_feed(
     feed_url: str,
-    feeds_file: str = 'feeds.txt',
+    feeds_file: Optional[str] = None,
     progress_callback: Optional[ProgressCallback] = None,
     job_control=None,
 ) -> ProcessFeedsResult:
@@ -217,14 +252,7 @@ def add_feed(
     if not is_valid:
         return ProcessFeedsResult(error=f"Invalid feed URL: {error}")
 
-    feeds_path = Path(feeds_file)
-    if feeds_path.exists():
-        with open(feeds_path, 'r', encoding='utf-8') as f:
-            existing_feeds = [line.strip() for line in f.readlines()]
-        if feed_url not in existing_feeds:
-            with open(feeds_path, 'a', encoding='utf-8') as f:
-                f.write(f"\n{feed_url}\n")
-    else:
-        feeds_path.write_text(f"{feed_url}\n", encoding='utf-8')
+    feeds_file = feeds_file or config.FEEDS_FILE
+    append_to_feeds_file([feed_url], feeds_file)
 
     return process_feeds_file(feeds_file, progress_callback=progress_callback)
