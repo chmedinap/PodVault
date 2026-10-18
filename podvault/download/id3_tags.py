@@ -1,5 +1,11 @@
 """
-ID3 tag management for podcast episode MP3 files.
+Tag management for podcast episode audio files.
+
+MP3 files get ID3 tags; MP4-container files (.m4a/.m4b/.mp4) get the
+equivalent MP4 atoms (Fase 23). Other formats (.ogg, .opus, .flac, ...)
+are downloaded and archived like any other episode, but tag writing is
+skipped for them. The function names keep their historical "id3"/"mp3"
+wording since they're part of the package's public API.
 """
 
 import logging
@@ -17,12 +23,72 @@ logger = setup_logging(__name__)
 try:
     from mutagen.id3 import ID3, TIT2, TPE1, TALB, TDRC, TRCK, TPOS, TCON, COMM, APIC
     from mutagen.mp3 import MP3
+    from mutagen.mp4 import MP4, MP4Cover
     from mutagen import File
     MUTAGEN_AVAILABLE = True
 except ImportError:
     MUTAGEN_AVAILABLE = False
     logger.warning("mutagen library not available. ID3 tag updates will be skipped.")
     logger.warning("Install with: pip install mutagen")
+
+ID3_EXTENSIONS = frozenset({'.mp3'})
+MP4_EXTENSIONS = frozenset({'.m4a', '.m4b', '.mp4'})
+
+
+def tags_supported(file_path: Path) -> bool:
+    """Whether this app knows how to write tags for `file_path`'s format."""
+    suffix = Path(file_path).suffix.lower()
+    return suffix in ID3_EXTENSIONS or suffix in MP4_EXTENSIONS
+
+
+def _image_mime_type(image_path: Path) -> str:
+    ext = image_path.suffix.lower()
+    return {'.png': 'image/png', '.gif': 'image/gif', '.webp': 'image/webp'}.get(ext, 'image/jpeg')
+
+
+def _update_mp4_tags(
+    file_path: Path,
+    title: str,
+    artist: str,
+    album: str,
+    year: Optional[int],
+    track: Optional[int],
+    disc_number: Optional[int],
+    comment: Optional[str],
+    cover_image_path: Optional[Path],
+    genre: str,
+) -> bool:
+    """MP4-atom equivalent of the ID3 frames `update_mp3_id3_tags` writes."""
+    audio_file = MP4(str(file_path))
+    if audio_file.tags is None:
+        audio_file.add_tags()
+    tags = audio_file.tags
+
+    if title:
+        tags['\xa9nam'] = [title]
+    if artist:
+        tags['\xa9ART'] = [artist]
+    if album:
+        tags['\xa9alb'] = [album]
+    if year:
+        tags['\xa9day'] = [str(year)]
+    if track is not None:
+        tags['trkn'] = [(track, 0)]
+    if disc_number is not None:
+        tags['disk'] = [(disc_number, 0)]
+    if genre:
+        tags['\xa9gen'] = [genre]
+    if comment:
+        tags['\xa9cmt'] = [comment]
+
+    if cover_image_path and cover_image_path.exists():
+        image_format = MP4Cover.FORMAT_PNG if _image_mime_type(cover_image_path) == 'image/png' else MP4Cover.FORMAT_JPEG
+        with open(cover_image_path, 'rb') as img_file:
+            tags['covr'] = [MP4Cover(img_file.read(), imageformat=image_format)]
+
+    audio_file.save()
+    logger.info(f"Successfully updated MP4 tags for {file_path}")
+    return True
 
 
 def update_mp3_id3_tags(
@@ -38,10 +104,12 @@ def update_mp3_id3_tags(
     genre: str = "Podcast"
 ) -> bool:
     """
-    Update ID3 tags for an MP3 file.
+    Update tags for an episode audio file: ID3 for MP3, MP4 atoms for
+    .m4a/.m4b/.mp4. Returns False (without touching the file) for formats
+    tags aren't written for.
     
     Parameters:
-    file_path: Path to the MP3 file
+    file_path: Path to the audio file
     title: Episode title
     artist: Podcast name (author_raw)
     album: Podcast name (author_raw)
@@ -61,6 +129,19 @@ def update_mp3_id3_tags(
     
     if not file_path.exists():
         logger.error(f"File does not exist: {file_path}")
+        return False
+
+    suffix = file_path.suffix.lower()
+    if suffix in MP4_EXTENSIONS:
+        try:
+            return _update_mp4_tags(file_path, title, artist, album, year, track,
+                                    disc_number, comment, cover_image_path, genre)
+        except Exception as e:
+            logger.error(f"Failed to update MP4 tags for {file_path}: {e}")
+            logger.debug(traceback.format_exc())
+            return False
+    if suffix not in ID3_EXTENSIONS:
+        logger.info(f"Tag writing isn't supported for '{suffix}' files; skipping {file_path}")
         return False
     
     try:
@@ -116,16 +197,7 @@ def update_mp3_id3_tags(
                     image_data = img_file.read()
                 
                 # Determine MIME type from file extension
-                ext = cover_image_path.suffix.lower()
-                mime_type = 'image/jpeg'  # default
-                if ext == '.png':
-                    mime_type = 'image/png'
-                elif ext == '.jpg' or ext == '.jpeg':
-                    mime_type = 'image/jpeg'
-                elif ext == '.gif':
-                    mime_type = 'image/gif'
-                elif ext == '.webp':
-                    mime_type = 'image/webp'
+                mime_type = _image_mime_type(cover_image_path)
                 
                 # Add cover image
                 audio_file.tags['APIC'] = APIC(
@@ -159,18 +231,25 @@ def update_mp3_id3_tags(
 def id3_tags_complete(file_path: Path) -> Optional[bool]:
     """
     Whether `file_path` has the three tags most visibly missing in a podcast
-    player: title (TIT2), artist (TPE1), and cover art (APIC). Shared by the
+    player: title (TIT2), artist (TPE1), and cover art (APIC) — or their MP4
+    equivalents (\xa9nam, \xa9ART, covr) for .m4a/.m4b/.mp4 files. Shared by the
     episode detail page (checks one file at render time) and the Storage
     page's cached "ID3 tags complete" background job (Fase 16b) so both
     agree on what "complete" means.
 
     Returns None if the file can't be read at all (missing, corrupt, or
     mutagen unavailable) — distinct from False, which means the file *was*
-    read and is missing one of the three tags.
+    read and is missing one of the three tags. Also None for formats this
+    app doesn't write tags for, so they aren't reported as "incomplete".
     """
-    if not MUTAGEN_AVAILABLE or not file_path.exists():
+    if not MUTAGEN_AVAILABLE or not file_path.exists() or not tags_supported(file_path):
         return None
     try:
+        if file_path.suffix.lower() in MP4_EXTENSIONS:
+            tags = MP4(str(file_path)).tags
+            if tags is None:
+                return False
+            return bool(tags.get('\xa9nam')) and bool(tags.get('\xa9ART')) and bool(tags.get('covr'))
         audio_file = File(str(file_path))
         if audio_file is None or audio_file.tags is None:
             return False
@@ -187,7 +266,7 @@ def id3_tags_complete(file_path: Path) -> Optional[bool]:
 def find_cover_image_path(file_path: Path, episode_folder: Path) -> Optional[Path]:
     """
     Find the cover image for an episode: prefer an episode-specific image
-    (same base name as the mp3, any common extension) in `episode_folder`,
+    (same base name as the audio file, any common extension) in `episode_folder`,
     falling back to the podcast-level image three levels up
     (episode_folder -> month -> year -> podcast).
 
@@ -195,7 +274,7 @@ def find_cover_image_path(file_path: Path, episode_folder: Path) -> Optional[Pat
     agree on which image an episode's cover is.
 
     Parameters:
-    file_path: Path to the episode's mp3 file (used to derive the image base name)
+    file_path: Path to the episode's audio file (used to derive the image base name)
     episode_folder: Path to the episode's folder
 
     Returns:
@@ -229,13 +308,13 @@ def update_episode_id3_tags_from_db(
     episode_folder: Path
 ) -> bool:
     """
-    Update ID3 tags for an episode MP3 file using data from the database.
+    Update tags for an episode audio file using data from the database.
     
     Parameters:
     conn: SQLite connection
     podcast_name: Name of the podcast (table name)
     episode_id: Episode ID
-    file_path: Path to the MP3 file
+    file_path: Path to the audio file
     episode_folder: Path to the episode folder (for finding images)
     
     Returns:

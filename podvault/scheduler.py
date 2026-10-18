@@ -26,9 +26,15 @@ _stop_event = threading.Event()
 
 
 def _loop() -> None:
+    from podvault.database.backup import maybe_backup_database
     from podvault.services.scheduling import run_due_checks
 
     while not _stop_event.is_set():
+        try:
+            # Throttled to one every BACKUP_INTERVAL_HOURS, so this is a daily backup in practice
+            maybe_backup_database()
+        except Exception:
+            logger.error("Scheduled database backup failed", exc_info=True)
         try:
             result = run_due_checks()
             if result.checked:

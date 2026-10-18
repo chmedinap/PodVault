@@ -22,9 +22,10 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Redirect
 
 from podvault import config, scheduler, services
 from podvault.database import jobs as jobs_db
+from podvault.database.backup import get_backup_dir
 from podvault.database.connection import get_db_connection
 from podvault.database.queries import mark_episodes_missing, table_exists
-from podvault.download.utils import TEMPLATE_VARIABLES
+from podvault.download.utils import AUDIO_MIME_TYPES, TEMPLATE_VARIABLES
 from podvault.jobs import get_job_runner
 from podvault.services.scheduling import INTERVAL_CHOICES_HOURS
 from podvault.web.templating import format_duration, format_size, templates
@@ -619,7 +620,8 @@ def episode_audio(name: str, episode_id: str):
         raise HTTPException(status_code=404, detail=info.error)
     # FileResponse handles Range requests, so the browser can seek without
     # downloading the whole file first.
-    return FileResponse(info.audio_path, media_type="audio/mpeg", filename=Path(info.audio_path).name)
+    media_type = AUDIO_MIME_TYPES.get(Path(info.audio_path).suffix.lower(), "application/octet-stream")
+    return FileResponse(info.audio_path, media_type=media_type, filename=Path(info.audio_path).name)
 
 
 @router.get("/podcasts/{name}/episodes/{episode_id}/cover")
@@ -644,6 +646,13 @@ def settings_page(request: Request, msg: Optional[str] = None, ok: Optional[str]
         {'k': 'PODVAULT_DEFAULT_DELAY_SECONDS', 'v': str(config.DEFAULT_DELAY_SECONDS)},
         {'k': 'PODVAULT_DOWNLOAD_TIMEOUT', 'v': str(config.DOWNLOAD_TIMEOUT)},
         {'k': 'PODVAULT_DB_TIMEOUT', 'v': str(config.DB_TIMEOUT)},
+        {'k': 'PODVAULT_USERNAME', 'v': config.WEB_USERNAME or 'not set (login disabled)'},
+        # Never echo the password itself, only whether one is configured
+        {'k': 'PODVAULT_PASSWORD', 'v': 'set' if config.WEB_PASSWORD else 'not set'},
+        {'k': 'PODVAULT_BACKUP_ENABLED', 'v': 'yes' if config.BACKUP_ENABLED else 'no'},
+        {'k': 'PODVAULT_BACKUP_DIR', 'v': str(get_backup_dir())},
+        {'k': 'PODVAULT_BACKUP_KEEP', 'v': str(config.BACKUP_KEEP)},
+        {'k': 'PODVAULT_BACKUP_INTERVAL_HOURS', 'v': str(config.BACKUP_INTERVAL_HOURS)},
     ]
     return templates.TemplateResponse(request, "settings.html", {
         "folder_template": settings.folder_template,

@@ -23,10 +23,11 @@ from podvault.database.connection import get_db_connection
 from podvault.database.queries import validate_and_quote_table_name
 from podvault.database.schema import add_download_columns_to_table
 from podvault.download.id3_tags import id3_tags_complete, update_episode_id3_tags_from_db
+from podvault.download.utils import AUDIO_EXTENSIONS
 from podvault.services.podcasts import list_podcast_table_names
 from podvault.services.results import DiskUsage
 
-_AUDIO_EXTENSIONS = {'.mp3'}
+_AUDIO_EXTENSIONS = AUDIO_EXTENSIONS
 _ART_METADATA_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.gif', '.webp', '.xml'}
 
 ProgressCallback = Callable[[int, int, Optional[str]], None]

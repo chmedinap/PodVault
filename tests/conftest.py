@@ -21,6 +21,11 @@ def isolated_env(tmp_path, monkeypatch):
     monkeypatch.setattr(config, 'DB_PATH', str(tmp_path / 'test_podcast_data.db'))
     monkeypatch.setattr(config, 'DOWNLOADS_FOLDER', str(tmp_path / 'downloads'))
     monkeypatch.setattr(config, 'DEFAULT_DELAY_SECONDS', 0)
+    # Don't inherit a developer's PODVAULT_USERNAME/PASSWORD/BACKUP_DIR from the environment
+    monkeypatch.setattr(config, 'WEB_USERNAME', None)
+    monkeypatch.setattr(config, 'WEB_PASSWORD', None)
+    monkeypatch.setattr(config, 'BACKUP_DIR', None)
+    monkeypatch.setattr(config, 'BACKUP_ENABLED', True)
     monkeypatch.chdir(tmp_path)
 
     if jobs_module._default_runner is not None:

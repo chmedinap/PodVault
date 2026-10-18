@@ -28,6 +28,7 @@ from podvault.database.transactions import (
 from podvault.download.utils import (
     build_episode_base_filename,
     build_episode_folder_path,
+    episode_audio_path,
     get_effective_title,
     sanitize_filename,
     parse_episode_date,
@@ -270,7 +271,7 @@ def download_all_episodes(
 ) -> Tuple[int, int]:
     """
     Download all episodes of a podcast that haven't been downloaded yet.
-    Organizes files in: downloads/podcast_title/year/month/episode_number - episode_title/Episode_Title - podcast_name.mp3
+    Organizes files in: downloads/podcast_title/year/month/episode_number - episode_title/Episode_Title - podcast_name.<ext>
     (see build_episode_folder_path() for the exact folder-naming rules)
     Adds a delay between downloads to avoid overwhelming the server.
 
@@ -488,8 +489,9 @@ def download_all_episodes(
             failed_downloads += 1
             continue
         
-        # File will be saved as Episode_Title - podcast_name.mp3
-        file_path = episode_folder / f"{base_filename}.mp3"
+        # File will be saved as Episode_Title - podcast_name.<ext>, the extension
+        # taken from the download URL (.mp3, .m4a, ...) unless a file already exists
+        file_path = episode_audio_path(episode_folder, base_filename, episode_url)
         
         # Check if file already exists
         if file_path.exists():
@@ -834,7 +836,7 @@ def download_last_episode(
         logger.error(f"Invalid filename template for episode '{episode_title}': {e}")
         print(f"Error building filename: {e}")
         return False
-    file_path = podcast_folder / f"{base_filename}.mp3"
+    file_path = episode_audio_path(podcast_folder, base_filename, episode_url)
     
     if file_path.exists():
         print(f"File already exists: {file_path}")
@@ -1016,7 +1018,7 @@ def download_one_episode(
         print(f"Error building filename: {e}")
         return False
 
-    file_path = episode_folder / f"{base_filename}.mp3"
+    file_path = episode_audio_path(episode_folder, base_filename, episode_url)
 
     if file_path.exists():
         print(f"File already exists: {file_path}")

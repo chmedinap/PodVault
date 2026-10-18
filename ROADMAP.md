@@ -411,6 +411,35 @@ Added at the user's request: three features aimed specifically at the app's role
 
 ---
 
+## Phase 23 — Hardening: web login, non-MP3 audio, database backups ✅ IMPLEMENTED
+
+**Goal:** close the three gaps that could cause real harm rather than mere inconvenience, found in a review after Phase 22 and the first public Docker Hub image (`martitoci/podvault`): the web UI had no login at all while Docker binds it to `0.0.0.0`; every episode was saved as `.mp3` and tagged with ID3 regardless of its real format; and the database — the one thing integrity checksums (Phase 19) don't protect — had no backups, despite a `ENABLE_BACKUP = True` flag in `config.py` that nothing read.
+
+**1. Optional web login (`podvault/web/auth.py`).**
+- HTTP Basic auth as plain ASGI middleware (not `BaseHTTPMiddleware`, so streamed audio responses pass through untouched), enabled when both `PODVAULT_USERNAME` and `PODVAULT_PASSWORD` are set; off by default so `podvault serve` on 127.0.0.1 is unchanged. Covers every route including static files, job-control POSTs, audio, and export; credentials compared with `secrets.compare_digest`.
+- Basic auth over a login page + session: no session store, no login template, no CSRF work for the app's plain HTML forms, and browsers resend it automatically, including on the `<audio>` element's Range requests.
+- Only one of the two variables set **fails closed** (500 with an explanation on every request) instead of silently running unprotected.
+- New unauthenticated `GET /healthz`; the Dockerfile `HEALTHCHECK` now polls it instead of `/`, which would 401 once a login is on.
+- `cli.serve()` warns when binding to a non-local host without a login. The Settings Environment panel shows the username and whether a password is set — never the password.
+
+**2. Non-MP3 audio (`download/utils.py`, `download/id3_tags.py`).**
+- `audio_extension_from_url()` picks the saved extension from the download URL's path (query string ignored; `.mp3` fallback when there's no recognised one). `find_existing_audio_file()` recognises an already-downloaded file under *any* audio extension, so pre-Phase-23 `.mp3`-named m4a files are reused, not downloaded a second time. All three download paths (`download_all_episodes`, `download_last_episode`, `download_one_episode`) go through `episode_audio_path()`.
+- Tags: MP3 keeps ID3; `.m4a/.m4b/.mp4` get the equivalent MP4 atoms (`©nam`, `©ART`, `©alb`, `©day`, `trkn`, `disk`, `©gen`, `©cmt`, `covr`); other formats are archived but not tagged (`update_mp3_id3_tags` returns False without touching the file, and `id3_tags_complete` returns None so they don't show as "incomplete" on Storage). Public function names kept for API compatibility.
+- Elsewhere: episode duration uses `mutagen.File` (any format), rename keeps the file's own extension, Storage's disk-usage buckets count every audio extension, and the `/audio` route sends a per-format MIME type (`audio/mp4`, `audio/ogg`, …) instead of always `audio/mpeg`.
+- Deliberately not done: sniffing `Content-Type` after download for extension-less URLs (would mean renaming files post-download and changing `_download_with_retry`'s contract), and Vorbis/FLAC tag writing.
+
+**3. Database backups (`podvault/database/backup.py`).**
+- `backup_database()` uses SQLite's online backup API (consistent while the server or a job is writing) into `<db dir>/backups/<stem>-YYYYmmdd-HHMMSS.db`, then prunes to the newest `PODVAULT_BACKUP_KEEP` (7). Failures are logged, never raised — a backup must not block a sync.
+- `maybe_backup_database()` throttles to one per `PODVAULT_BACKUP_INTERVAL_HOURS` (24) and is called before every `process_feeds_file()` (the path behind `add`/`process-feeds`, which rewrites tables wholesale) and on every scheduler tick under `serve` — so in practice a daily backup.
+- `process_feeds_file()` used to `os.remove()` a database that failed validation; it now first copies it aside as `...-corrupt.db` (`preserve_corrupt_database()`, never rotated).
+- `podvault backup` (forces one, ignoring the throttle) and `podvault backup --list`. Settings: `PODVAULT_BACKUP_ENABLED/DIR/KEEP/INTERVAL_HOURS`; the old `ENABLE_BACKUP` name is kept as an alias.
+
+**Tests:** `test_auth.py`, `test_audio_formats.py`, `test_backup.py` (32 new). `isolated_env` now pins login/backup settings so a developer's own `PODVAULT_*` environment can't leak into the suite. MP4 tag writing was additionally verified by hand against a real AAC `.m4a` (generated with macOS `afconvert`), since the suite has no real audio fixtures.
+
+**Risk:** low. Auth is opt-in. The extension change only affects new downloads (existing files are found by `find_existing_audio_file`, and `Saved_Path` already pointed at them). Backups only read the database.
+
+---
+
 ## Current status
 
-**Phases 0-22 complete.** Everything planned — the original web interface + Docker (0-6), configurable naming/scheduling/playback (7-9), the full visual redesign (10-18), the vault-specific features (19-21), and job control + true single-episode download + archive-health surfacing (22) — is implemented, tested (181 automated tests — it started at 98 before the redesign, 132 after it, 153 with the vault features, now 181 with Phase 22), and documented here and in `ARCHITECTURE.md`/`README.md`. There's no pending next step from this roadmap — any new work needs a new phase.
+**Phases 0-23 complete.** Everything planned — the original web interface + Docker (0-6), configurable naming/scheduling/playback (7-9), the full visual redesign (10-18), the vault-specific features (19-21), job control + true single-episode download + archive-health surfacing (22), and hardening (23: web login, non-MP3 audio, database backups) — is implemented, tested (213 automated tests — it started at 98 before the redesign, 132 after it, 153 with the vault features, 181 with Phase 22, now 213 with Phase 23), and documented here and in `ARCHITECTURE.md`/`README.md`. There's no pending next step from this roadmap — any new work needs a new phase.

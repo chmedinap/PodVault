@@ -300,9 +300,35 @@ def show_schedule(podcast_name, interval_hours=None, disable=False, auto_downloa
     return True
 
 
+def backup_database(list_only=False):
+    """Back up the database now (ignoring the automatic-backup throttle), or list existing backups."""
+    from podvault import config
+    from podvault.database.backup import backup_database as run_backup, get_backup_dir, list_backups
+
+    if not list_only:
+        target = run_backup()
+        if target is None:
+            print(f"❌ Backup failed (or no database at {config.DB_PATH}). See the log for details.")
+            return False
+        print(f"✅ Database backed up to {target}")
+
+    backups = list_backups()
+    print(f"\n📦 Backups in {get_backup_dir()} (the newest {config.BACKUP_KEEP} are kept):")
+    if not backups:
+        print("  (none yet)")
+    for path in backups:
+        print(f"  {path.name}  ({path.stat().st_size / 1024:.0f} KB)")
+    return True
+
+
 def serve(host='127.0.0.1', port=8000, reload=False):
     """Start the web interface."""
     import uvicorn
+    from podvault import config
+
+    if not (config.WEB_USERNAME and config.WEB_PASSWORD) and host not in ('127.0.0.1', 'localhost', '::1'):
+        print(f"⚠️  The web interface is reachable from other machines on {host} and has no login.")
+        print("   Set PODVAULT_USERNAME and PODVAULT_PASSWORD to require one.")
 
     if reload:
         print("⚠️  --reload starts uvicorn's reloader in a subprocess; the auto-refresh scheduler won't run there, skipping it.")
@@ -398,6 +424,10 @@ Examples:
     serve_parser.add_argument('--port', type=int, default=8000, help='Port to bind to (default: 8000)')
     serve_parser.add_argument('--reload', action='store_true', help='Auto-reload on code changes (development only)')
 
+    # Backup command
+    backup_parser = subparsers.add_parser('backup', help='Back up the database now, or list existing backups')
+    backup_parser.add_argument('--list', action='store_true', help='Only list existing backups')
+
     # Config command
     config_parser = subparsers.add_parser('config', help='Show or update the folder/filename naming templates')
     config_parser.add_argument('--folder-template', help='New folder template (see --help variables list)')
@@ -452,6 +482,8 @@ Examples:
             success = rename_episode(args.podcast, args.episode_id, args.title)
         elif args.command == 'serve':
             success = serve(host=args.host, port=args.port, reload=args.reload)
+        elif args.command == 'backup':
+            success = backup_database(list_only=args.list)
         elif args.command == 'config':
             success = show_config(folder_template=args.folder_template, filename_template=args.filename_template)
         elif args.command == 'schedule':

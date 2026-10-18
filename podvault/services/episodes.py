@@ -34,9 +34,9 @@ from podvault.validation import validate_podcast_name
 logger = setup_logging(__name__)
 
 try:
-    from mutagen.mp3 import MP3
+    from mutagen import File as MutagenFile
 except ImportError:
-    MP3 = None
+    MutagenFile = None
 
 
 def list_episodes(podcast_name: str) -> EpisodeListResult:
@@ -118,9 +118,10 @@ def get_episode(podcast_name: str, episode_id: str) -> EpisodeDetail:
     if saved_path and Path(saved_path).exists():
         audio_path = Path(saved_path)
 
-        if MP3 is not None:
+        if MutagenFile is not None:
             try:
-                detail.duration_seconds = MP3(str(audio_path)).info.length
+                # mutagen.File picks the right parser for mp3/m4a/ogg/flac/...
+                detail.duration_seconds = MutagenFile(str(audio_path)).info.length
             except Exception as e:
                 logger.debug(f"Could not read duration for {audio_path}: {e}")
 
@@ -248,12 +249,13 @@ def rename_episode(
             new_folder.parent.mkdir(parents=True, exist_ok=True)
             old_folder.rename(new_folder)
 
-            # Rename every file that shares the old base filename (mp3, cover image, metadata xml)
+            # Rename every file that shares the old base filename (audio, cover image, metadata xml)
             for item in new_folder.iterdir():
                 if item.stem == old_base_filename:
                     item.rename(new_folder / f"{new_base_filename}{item.suffix}")
 
-            new_file_path = new_folder / f"{new_base_filename}.mp3"
+            # Keep the audio file's own extension (.mp3, .m4a, ...)
+            new_file_path = new_folder / f"{new_base_filename}{old_file.suffix}"
             cursor.execute(
                 f"UPDATE {safe_table_name} SET Saved_Path = ?, File_name = ? WHERE id = ?",
                 (str(new_file_path), new_file_path.name, episode_id),

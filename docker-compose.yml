@@ -6,3 +6,10 @@ services:
     volumes:
       - ./data:/app/data
     restart: unless-stopped
+    # Optional settings — uncomment to use. Setting both USERNAME and PASSWORD
+    # turns on a login for the web interface (recommended if port 8000 is
+    # reachable from other machines). Database backups go to /app/data/backups.
+    # environment:
+    #   PODVAULT_USERNAME: admin
+    #   PODVAULT_PASSWORD: change-me
+    #   PODVAULT_BACKUP_KEEP: "7"

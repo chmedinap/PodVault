@@ -66,6 +66,8 @@ db.sqlite3-journal
 
 # PodVault local data
 data/podvault_data.db
+data/backups/
+backups/
 
 # Flask stuff:
 instance/

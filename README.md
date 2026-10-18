@@ -8,7 +8,8 @@ A powerful Python application for downloading, organizing, and managing podcast 
 - 🍎 **Apple Podcast Integration**: Automatically converts Apple Podcast links to RSS feeds
 - 💾 **SQLite Database**: Stores all episode metadata in a local database
 - 📥 **Automatic Downloads**: Download all episodes or just the latest
-- 🏷️ **ID3 Tag Management**: Automatically updates MP3 tags with episode metadata
+- 🎧 **Any Podcast Audio Format**: MP3, M4A/M4B (AAC), Ogg/Opus, FLAC… saved with the right extension
+- 🏷️ **Tag Management**: Automatically writes episode metadata as ID3 tags (MP3) or MP4 tags (M4A/M4B)
 - 🖼️ **Image Handling**: Downloads and embeds podcast/episode cover art
 - 📊 **Statistics**: Track download progress and podcast statistics
 - 📁 **Organized Storage**: Episodes organized by podcast, year, and date
@@ -16,7 +17,9 @@ A powerful Python application for downloading, organizing, and managing podcast 
 - 🌐 **Web Interface**: Browser dashboard with library, download queue, schedules, activity log, storage health, and an in-browser player
 - ⏰ **Auto-Refresh**: Per-podcast schedules that check feeds and download new episodes automatically
 - 🛡️ **Archival Safeguards**: SHA-256 integrity checks, episodes kept even after they leave the feed, and JSON export of the library inventory
-- 🐳 **Docker**: Ready-to-run `docker compose` setup with persistent data
+- 💾 **Automatic Database Backups**: Daily rotating copies of the database, plus `podvault backup` on demand
+- 🔒 **Optional Login**: Username/password protection for the web interface
+- 🐳 **Docker**: Ready-to-run `docker compose` setup with persistent data, and a multi-arch image on Docker Hub
 
 ## Installation
 
@@ -51,7 +54,15 @@ docker compose up --build
 
 Then open http://localhost:8000. The database, `downloads/`, and `feeds.txt` are stored under `./data` on the host (mapped to `/app/data` in the container via `docker-compose.yml`), so they survive rebuilds and restarts. To run it in the background: `docker compose up -d --build`; to stop it: `docker compose down`.
 
-Paths can be customized via environment variables (see `docker-compose.yml` or set them directly): `PODVAULT_DB_PATH`, `PODVAULT_DOWNLOADS_FOLDER`, `PODVAULT_FEEDS_FILE`, `PODVAULT_LOG_LEVEL`, `PODVAULT_LOG_FILE`, `PODVAULT_SCHEDULER_POLL_INTERVAL_SECONDS`.
+A pre-built image (linux/amd64 and linux/arm64) is also published on Docker Hub, so you can skip the build — replace `build: .` with `image: martitoci/podvault:latest` in `docker-compose.yml`, or run it directly:
+
+```bash
+docker run -d -p 8000:8000 -v ./data:/app/data martitoci/podvault:latest
+```
+
+**If port 8000 is reachable from other machines, turn on the login** by setting `PODVAULT_USERNAME` and `PODVAULT_PASSWORD` (there's a commented-out `environment:` block for this in `docker-compose.yml`; see [Web Login](#web-login)). Database backups are written to `./data/backups` on the host (see [Database Backups](#database-backups)).
+
+Everything else is configured with `PODVAULT_*` environment variables too — see [Configuration](#configuration) for the full list.
 
 The CLI is still available inside the container, e.g. for `migrate-layout` (deliberately not exposed in the web UI — see [File Organization](#file-organization)):
 
@@ -234,6 +245,26 @@ podvault schedule podcast_name --disable
 
 This only takes effect while the web server is running (`podvault serve`) — a background thread wakes up periodically (every `PODVAULT_SCHEDULER_POLL_INTERVAL_SECONDS`, default 300s) and re-syncs any podcast whose interval has elapsed, same as running `add` again. It doesn't run from a plain CLI command, since there's no long-running process to host it; `--reload` skips it too (uvicorn's reloader runs the actual server in a subprocess the scheduler thread never reaches). Also configurable per podcast from its detail page in the web UI, with "last check" showing how long since the last check.
 
+#### Database Backups
+
+```bash
+# Back up the database right now and list the backups
+podvault backup
+
+# Only list existing backups
+podvault backup --list
+```
+
+PodVault also backs up the database automatically — before syncing feeds, and once a day from the background thread while `podvault serve` is running — at most once every `PODVAULT_BACKUP_INTERVAL_HOURS` (default 24). Backups go to a `backups/` folder next to the database (`./data/backups` in Docker; override with `PODVAULT_BACKUP_DIR`), named `podvault_data-YYYYmmdd-HHMMSS.db`, and only the newest `PODVAULT_BACKUP_KEEP` (default 7) are kept. They're taken with SQLite's online backup API, so they're consistent even while downloads are running. Set `PODVAULT_BACKUP_ENABLED=false` to turn the automatic ones off.
+
+If the database is ever found corrupted, PodVault recreates it — but first copies the damaged file aside as `...-corrupt.db` in the same folder (these are never deleted by rotation).
+
+To restore, stop PodVault and copy a backup over the database file:
+
+```bash
+cp backups/podvault_data-20260101-030000.db podvault_data.db
+```
+
 #### Web Interface
 
 ```bash
@@ -258,6 +289,16 @@ Any action that starts a background job (adding a feed, downloading, checking ID
 - **Export** — `GET /podcasts/{name}/export` and `GET /export` download a JSON manifest of a podcast's (or the whole library's) full episode inventory — including episodes removed from their live feed, and each episode's checksum/integrity state — independent of PodVault's own database. Manifest-only by design: the audio files already live in an organized folder tree on disk (see [Naming Configuration](#naming-configuration)), so exporting doesn't duplicate them into a second copy.
 
 Every downloaded episode has a "▶" button that opens a player bar at the bottom of the page — cover art, title, podcast name, a seek bar you can scrub without waiting for the whole file to load, prev/±15s/±30s/next, and a playback-speed toggle. The player doesn't survive navigating to a different page (this app reloads the full page on every link/form, by design — see `ROADMAP.md`), so it doesn't try to fake persistence across pages.
+
+##### Web Login
+
+By default the web interface has no login, which is fine on `127.0.0.1`. To require one, set both variables before starting the server:
+
+```bash
+PODVAULT_USERNAME=admin PODVAULT_PASSWORD='a-long-password' podvault serve --host 0.0.0.0
+```
+
+Every page, action, audio stream, and export then asks for that username and password (standard browser login prompt, HTTP Basic auth). Only `/healthz`, used by Docker's health check, stays open. Setting just one of the two is treated as a mistake and every request is refused until both are set. `podvault serve` warns you if you bind to a non-local address without a login. Basic auth doesn't encrypt anything, so if PodVault is reachable from the internet, put it behind an HTTPS reverse proxy (Caddy, Traefik, nginx…).
 
 Starting the server also starts the auto-refresh background thread (see [Auto-Refresh Schedule](#auto-refresh-schedule)). See [Docker](#docker) to run it in a container instead. `migrate-layout --apply` is CLI-only by design — it moves real files on disk, so it's not something to trigger from a web click; the Storage page only shows the dry-run plan.
 
@@ -296,9 +337,13 @@ podvault migrate-layout           # dry run: reports what would move
 podvault migrate-layout --apply   # actually moves files and updates the database
 ```
 
-### ID3 Tags
+### Audio Formats and Tags
 
-Each downloaded MP3 file automatically includes:
+Each episode is saved with the extension from its download URL: `.mp3`, `.m4a`, `.m4b`, `.aac`, `.ogg`, `.opus`, `.flac`, `.wav`, or `.mp4`. If the URL has none (some hosts use URLs like `/stream/12345`), it's saved as `.mp3`. The web player serves each file with the matching MIME type.
+
+Tags are written for MP3 (ID3) and M4A/M4B/MP4 (MP4 tags). Other formats are downloaded and archived normally, but their tags are left as they came from the publisher.
+
+Each tagged file automatically includes:
 
 - **Title**: Episode title
 - **Artist**: Podcast name (original, before normalization)
@@ -335,6 +380,11 @@ Defaults live in `podvault/config.py`. The deployment-relevant ones can be overr
 | `PODVAULT_SCHEDULER_POLL_INTERVAL_SECONDS` | `300` | How often the auto-refresh thread wakes up |
 | `PODVAULT_LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` |
 | `PODVAULT_LOG_FILE` | *(unset)* | Log to this file in addition to the console |
+| `PODVAULT_USERNAME` / `PODVAULT_PASSWORD` | *(unset)* | Require this login for the web interface (both must be set) — see [Web Login](#web-login) |
+| `PODVAULT_BACKUP_ENABLED` | `true` | Automatic database backups on/off |
+| `PODVAULT_BACKUP_DIR` | `backups/` next to the database | Where backups are written |
+| `PODVAULT_BACKUP_KEEP` | `7` | How many backups to keep |
+| `PODVAULT_BACKUP_INTERVAL_HOURS` | `24` | Minimum time between automatic backups |
 
 Other settings (retries, RSS cache size, filename length) are plain constants in `config.py`:
 
@@ -389,10 +439,11 @@ pip install mutagen
 - Check the logs for error messages
 - Ensure the downloads folder is writable
 
-### ID3 Tags Not Updating
+### Tags Not Updating
 
 - Make sure mutagen is installed
-- Check that the MP3 file exists and is writable
+- Check the file's format: tags are only written for MP3 and M4A/M4B/MP4 (see [Audio Formats and Tags](#audio-formats-and-tags))
+- Check that the audio file exists and is writable
 - Review the logs for specific error messages
 
 ### Database Errors
@@ -400,6 +451,12 @@ pip install mutagen
 - Ensure you have write permissions in the project directory
 - Check that the database file isn't locked by another process (for example, a CLI command running while `podvault serve` is writing)
 - Make sure `PODVAULT_DB_PATH` points where you expect — in Docker it's `/app/data/podvault_data.db`, i.e. `./data/podvault_data.db` on the host
+- If the database is damaged or something went wrong after a sync, restore the latest copy from `backups/` (see [Database Backups](#database-backups))
+
+### The Web Interface Keeps Asking for a Password
+
+- Check that `PODVAULT_USERNAME` and `PODVAULT_PASSWORD` are set the way you think (the Settings page shows the username and whether a password is set, never the password itself)
+- If every page shows "login is misconfigured", only one of the two variables is set — set both, or neither
 
 ## File Structure
 
@@ -425,19 +482,19 @@ PodVault/
     ├── validation.py         # Input validation
     ├── logging_config.py     # Logging setup
     ├── data/                 # RSS feed parsing and statistics
-    ├── database/             # Connections, schema, queries, jobs, settings, scheduling
-    ├── download/             # Downloader, ID3 tags, metadata, path/naming utilities
+    ├── database/             # Connections, schema, queries, jobs, settings, scheduling, backups
+    ├── download/             # Downloader, audio tags, metadata, path/naming utilities
     ├── services/             # Business logic shared by the CLI and web UI
     │                         #   (feeds, downloads, episodes, queue, storage,
     │                         #    integrity, export, playback, settings, ...)
-    └── web/                  # FastAPI app, routes, Jinja templates, static fonts
+    └── web/                  # FastAPI app, optional login, routes, Jinja templates, static fonts
 ```
 
 The CLI and the web interface are thin layers over `podvault/services/`. See [ARCHITECTURE.md](ARCHITECTURE.md) for details.
 
 ## Tips
 
-1. **Backup Your Database**: The database file (`podvault_data.db`) contains all your podcast metadata. Keep it backed up.
+1. **Backup Your Database**: The database file (`podvault_data.db`) contains all your podcast metadata. PodVault keeps rotating local copies automatically (see [Database Backups](#database-backups)), but those live on the same disk. Copy the `backups/` folder somewhere else from time to time too.
 
 2. **Organize Your Feeds**: Keep `feeds.txt` organized with comments:
    ```

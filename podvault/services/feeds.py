@@ -13,6 +13,7 @@ import pandas as pd
 
 from podvault import config
 from podvault.data.collection import collect_data, normalize_feed_url
+from podvault.database.backup import maybe_backup_database, preserve_corrupt_database
 from podvault.database.connection import clean_dataframe_for_sqlite, get_db_connection, is_valid_database
 from podvault.database.queries import table_exists, validate_and_quote_table_name
 from podvault.database.schema import add_download_columns_to_table, add_indexes_to_table, add_podcast_image_url_to_summary
@@ -178,7 +179,11 @@ def process_feeds_file(feeds_file: str = 'feeds.txt', progress_callback: Optiona
     db_path = config.DB_PATH
     if os.path.exists(db_path) and not is_valid_database(db_path):
         logger.warning(f"Database {db_path} is corrupted. Recreating it.")
+        preserve_corrupt_database(db_path)
         os.remove(db_path)
+    else:
+        # Each sync rewrites podcast tables wholesale; keep a recent copy first.
+        maybe_backup_database(db_path)
 
     total = len(feed_urls)
     results = []

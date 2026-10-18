@@ -24,10 +24,28 @@ def _env_float(name: str, default: float) -> float:
     return float(value) if value is not None else default
 
 
+def _env_bool(name: str, default: bool) -> bool:
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    return value.strip().lower() not in ('0', 'false', 'no', 'off', '')
+
+
 # Database Configuration
 DB_PATH = _env_str('PODVAULT_DB_PATH', 'podvault_data.db')
 DB_TIMEOUT = _env_float('PODVAULT_DB_TIMEOUT', 30.0)
-ENABLE_BACKUP = True
+
+# Database Backup Configuration (Fase 23 — see database/backup.py)
+BACKUP_ENABLED = _env_bool('PODVAULT_BACKUP_ENABLED', True)
+ENABLE_BACKUP = BACKUP_ENABLED  # historical name, kept for compatibility
+BACKUP_DIR = os.environ.get('PODVAULT_BACKUP_DIR')  # None = a "backups/" folder next to the database
+BACKUP_KEEP = _env_int('PODVAULT_BACKUP_KEEP', 7)  # how many automatic backups to keep
+BACKUP_INTERVAL_HOURS = _env_float('PODVAULT_BACKUP_INTERVAL_HOURS', 24)  # min time between automatic backups
+
+# Web Interface Authentication (Fase 23 — see web/auth.py)
+# HTTP Basic auth is enabled when both are set; leave both unset to disable.
+WEB_USERNAME = os.environ.get('PODVAULT_USERNAME')
+WEB_PASSWORD = os.environ.get('PODVAULT_PASSWORD')
 
 # Download Configuration
 DOWNLOADS_FOLDER = _env_str('PODVAULT_DOWNLOADS_FOLDER', 'downloads')

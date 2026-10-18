@@ -39,6 +39,65 @@ def sanitize_filename(filename: str) -> str:
     return filename
 
 
+# Audio formats an episode can be saved as (Fase 23). Podcasts aren't all MP3:
+# AAC in an MP4 container (.m4a/.m4b) is common, and Ogg/Opus/FLAC show up too.
+# Maps extension -> MIME type served to the browser player.
+AUDIO_MIME_TYPES = {
+    '.mp3': 'audio/mpeg',
+    '.m4a': 'audio/mp4',
+    '.m4b': 'audio/mp4',
+    '.mp4': 'audio/mp4',
+    '.aac': 'audio/aac',
+    '.ogg': 'audio/ogg',
+    '.oga': 'audio/ogg',
+    '.opus': 'audio/ogg',
+    '.flac': 'audio/flac',
+    '.wav': 'audio/wav',
+}
+AUDIO_EXTENSIONS = frozenset(AUDIO_MIME_TYPES)
+DEFAULT_AUDIO_EXTENSION = '.mp3'
+
+
+def audio_extension_from_url(url: Optional[str]) -> str:
+    """
+    The file extension to save an episode under, taken from its download
+    URL's path (query string ignored, so tracking redirects like
+    `.../ep.m4a?src=feed` still work). Falls back to `.mp3` when the URL has
+    no recognised audio extension — the historical behaviour, and still the
+    most common podcast format.
+    """
+    if url:
+        try:
+            from urllib.parse import urlparse
+            suffix = Path(urlparse(url).path).suffix.lower()
+        except ValueError:
+            suffix = ''
+        if suffix in AUDIO_EXTENSIONS:
+            return suffix
+    return DEFAULT_AUDIO_EXTENSION
+
+
+def find_existing_audio_file(episode_folder: Path, base_filename: str) -> Optional[Path]:
+    """
+    An already-downloaded audio file for this episode in `episode_folder`,
+    whatever its audio extension — so a re-run recognises an existing
+    `.m4a` (or a pre-Fase-23 `.mp3` saved for what is really an m4a feed)
+    instead of downloading it again under a second name. Cover images and
+    metadata XML share the base filename, so only audio extensions count.
+    """
+    for ext in AUDIO_MIME_TYPES:
+        candidate = episode_folder / f"{base_filename}{ext}"
+        if candidate.exists():
+            return candidate
+    return None
+
+
+def episode_audio_path(episode_folder: Path, base_filename: str, episode_url: Optional[str]) -> Path:
+    """Where an episode's audio lives: the existing file if any, else a new path with the URL's extension."""
+    return (find_existing_audio_file(episode_folder, base_filename)
+            or episode_folder / f"{base_filename}{audio_extension_from_url(episode_url)}")
+
+
 def get_effective_title(title: str, custom_title: Optional[str]) -> str:
     """
     Return the title to actually use for display/file naming/ID3 tags.

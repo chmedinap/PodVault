@@ -20,9 +20,10 @@ This document provides a detailed technical overview of the PodVault application
 14. [Web Interface Redesign (Fases 10-18)](#web-interface-redesign-fases-10-18)
 15. [Vault Features (Fases 19-21)](#vault-features-fases-19-21)
 16. [Job Control, Single-Episode Download, and Archive Health (Fase 22)](#job-control-single-episode-download-and-archive-health-fase-22)
-17. [Deployment (Docker)](#deployment-docker)
-18. [Security Considerations](#security-considerations)
-19. [User Interfaces](#user-interfaces)
+17. [Hardening: Web Login, Audio Formats, Database Backups (Fase 23)](#hardening-web-login-audio-formats-database-backups-fase-23)
+18. [Deployment (Docker)](#deployment-docker)
+19. [Security Considerations](#security-considerations)
+20. [User Interfaces](#user-interfaces)
 
 ## System Overview
 
@@ -31,7 +32,7 @@ PodVault is a modular Python application for *archiving* podcasts. It is designe
 - Store metadata in a SQLite database
 - Download podcast episodes into a configurable, template-driven folder structure
 - Update MP3 ID3 tags with complete metadata
-- Keep the archive trustworthy over time: SHA-256 integrity checks, retention of episodes that leave their feed, and a portable JSON export
+- Keep the archive trustworthy over time: SHA-256 integrity checks, retention of episodes that leave their feed, a portable JSON export, and rotating database backups
 - Refresh feeds on a per-podcast schedule and run long work (syncs, downloads, scans) as controllable background jobs
 - Expose all of this through both a CLI and a server-rendered web interface
 
@@ -100,7 +101,8 @@ podvault/
 │   ├── queries.py, schema.py, transactions.py → sqlite3
 │   ├── jobs.py → job history table
 │   ├── scheduling.py → summary-table schedule columns
-│   └── settings.py → app_settings table
+│   ├── settings.py → app_settings table
+│   └── backup.py → sqlite3 online backup API, config
 ├── download/
 │   ├── downloader.py → requests, database, data.collection, hashing
 │   ├── id3_tags.py → mutagen, sqlite3
@@ -108,7 +110,8 @@ podvault/
 │   └── utils.py → pathlib, sqlite3 (naming template engine)
 ├── services/ → data, database, download, validation, hashing
 └── web/
-    ├── app.py → fastapi, StaticFiles (/static)
+    ├── app.py → fastapi, StaticFiles (/static), auth middleware, /healthz
+    ├── auth.py → config (optional HTTP Basic login, plain ASGI middleware)
     ├── routes.py → services, jobs, scheduler, database.jobs
     └── templating.py → jinja2 (+ size/duration filters)
 ```
@@ -238,7 +241,7 @@ Handles database schema evolution and migrations.
 1. Query database for undownloaded episodes
 2. For each episode:
    a. Create folder structure
-   b. Download MP3 file (with retry)
+   b. Download audio file (with retry; extension from the URL — .mp3, .m4a, ...)
    c. Download episode image (if available)
    d. Update ID3 tags
    e. Download podcast image (once)
@@ -265,10 +268,11 @@ Handles database schema evolution and migrations.
 - Saves with correct extension
 - Returns success/failure
 
-#### ID3 Tag Management (`id3_tags.py`)
+#### Tag Management (`id3_tags.py`)
 
 **`update_mp3_id3_tags(file_path, title, artist, ...) -> bool`**
-- Updates MP3 file ID3 tags using `mutagen`
+- Updates the file's tags using `mutagen`, dispatched by extension (Fase 23): ID3 for `.mp3`, MP4 atoms for `.m4a/.m4b/.mp4` (`_update_mp4_tags()` — `©nam`, `©ART`, `©alb`, `©day`, `trkn`, `disk`, `©gen`, `©cmt`, `covr`); returns False without touching the file for other formats. Name kept for API compatibility
+- ID3 mapping for MP3:
 - Maps database fields to ID3 tag fields:
   - `title` → TIT2 (Title)
   - `artist` → TPE1 (Artist)
@@ -371,7 +375,7 @@ Every function that can run as a background job accepts `progress_callback=` and
 
 - **`jobs.py`** — `JobRunner` wraps a `ThreadPoolExecutor`, persists every job (type, status, progress, message) to the `jobs` table via `database/jobs.py`, and gives each job a `JobControl` for cancel/pause/resume/skip. `get_job_runner()` returns the process-wide instance.
 - **`scheduler.py`** — one daemon thread that periodically calls `services.scheduling.run_due_checks()`; see [Scheduler (Fase 8)](#scheduler-fase-8).
-- **`web/app.py`** — builds the FastAPI app, mounts `/static` (self-hosted IBM Plex fonts), and includes the router.
+- **`web/app.py`** — builds the FastAPI app, installs the optional login middleware (`web/auth.py`), mounts `/static` (self-hosted IBM Plex fonts), includes the router, and serves the unauthenticated `/healthz`.
 - **`web/routes.py`** — sync route handlers over the service layer; anything slow is submitted to the `JobRunner` and the handler redirects back with a toast message. Pages: Library (`/`), podcast and episode detail, Queue, Schedule, Activity, Storage, Settings, plus JSON job-status/control endpoints, audio/cover streaming, and export.
 - **`web/templating.py` + `web/templates/`** — Jinja2 environment with size/duration formatting filters; `base.html` holds the shared shell (sidebar, topbar, toast, job strip, player bar) and all CSS/JS — no SPA framework, no build step.
 
@@ -406,7 +410,7 @@ Every function that can run as a background job accepts `progress_callback=` and
    ↓
 2. For each episode:
    a. Create folder: downloads/podcast/year/month/episode_number - title/ (see build_episode_folder_path())
-   b. Download MP3 → episode_folder/episode.mp3
+   b. Download audio → episode_folder/episode.<ext> (ext from the URL; an existing file under any audio extension is reused)
    c. Download episode image → episode_folder/episode_image.jpg
    d. Update ID3 tags (reads from database, writes to MP3)
    e. Download podcast image → podcast_folder/podcast_image.jpg (once)
@@ -700,8 +704,11 @@ Already shipped from earlier versions of this list: checksum validation (Fase 19
 - `test_hashing.py` — `compute_checksum()` matches `hashlib` (Fase 19)
 - `test_integrity_service.py` — `run_integrity_check()`: baseline hashing, verification, and corruption detection that preserves the last-known-good checksum (Fase 19)
 - `test_export_service.py` — `services.export` manifests, including removed-from-feed episodes and checksum state (Fase 21)
+- `test_auth.py` — the optional login: off by default, every route (pages, POSTs, static, export) challenged when on, wrong/malformed credentials rejected, `/healthz` always public, half-configured login fails closed, password never rendered (Fase 23)
+- `test_audio_formats.py` — extension from URL, existing-file reuse across extensions, `.m4a`/`.ogg` downloads, rename keeps the extension, per-format MIME on `/audio`, tag-writer dispatch (Fase 23)
+- `test_backup.py` — consistent copy, `BACKUP_DIR` override, rotation, throttling, disabled flag, backup before a re-sync, corrupt-database preservation (Fase 23)
 
-181 tests in total, all runnable offline with `pytest`.
+`isolated_env` also pins `WEB_USERNAME`/`WEB_PASSWORD`/`BACKUP_DIR`/`BACKUP_ENABLED`, so a developer's own `PODVAULT_*` environment can't change test outcomes. 213 tests in total, all runnable offline with `pytest`.
 
 Not covered (acceptable gaps for a single-user local app, per ROADMAP.md Fase 5): real network/RSS parsing, real ID3 tag writing against real MP3s, concurrent job execution.
 
@@ -775,6 +782,16 @@ Checked **only at episode boundaries**, never mid-file-transfer: `download_all_e
 
 **Accessibility pass.** The player bar's controls and every row-level icon action (rename, single-episode download, up-next remove, pause/resume/cancel) were converted from `<span onclick>`-style elements to real `<button>`s with `aria-label`/`title`, and `base.html` gained a `:focus-visible` outline rule covering buttons, links, nav items, and pills — a plain CSS addition, no JS behavior change.
 
+## Hardening: Web Login, Audio Formats, Database Backups (Fase 23)
+
+Three fixes for gaps that could cause real harm rather than inconvenience.
+
+**Optional web login (`web/auth.py`).** `BasicAuthMiddleware` is plain ASGI middleware (not Starlette's `BaseHTTPMiddleware`, which buffers/wraps streaming responses — audio playback goes straight through this way). It reads `config.WEB_USERNAME`/`WEB_PASSWORD` per request (monkeypatchable in tests); with neither set it's a pass-through, so local `podvault serve` is unchanged. With both set, every request except `PUBLIC_PATHS` (`/healthz`) needs a matching `Authorization: Basic` header, compared with `secrets.compare_digest` on both halves. Exactly one set is a misconfiguration and fails closed with a 500 rather than silently serving unprotected. HTTP Basic was chosen over a login form + session cookie: no session store, no login template, no CSRF work for the plain HTML forms, and browsers resend credentials automatically — including for the `<audio>` element's Range requests. It isn't encryption, so internet-facing deployments need an HTTPS reverse proxy. The Dockerfile `HEALTHCHECK` polls `/healthz` (polling `/` would turn unhealthy as soon as a login is on), and `cli.serve()` warns when binding a non-local host with no login.
+
+**Non-MP3 audio.** `download/utils.py` gained `AUDIO_MIME_TYPES`/`AUDIO_EXTENSIONS`, `audio_extension_from_url()` (URL path suffix, query ignored, `.mp3` fallback), `find_existing_audio_file()` (existing audio under *any* extension — so pre-Fase-23 files saved as `.mp3` for m4a URLs are reused, not fetched again), and `episode_audio_path()` combining the two, used by all three download functions. Tag writing dispatches by extension (see Tag Management above); `id3_tags_complete()` checks MP4 atoms for MP4 files and returns None for untagged formats so the Storage ID3 check doesn't count them as incomplete. Duration (`services/episodes.py`) uses `mutagen.File`, rename keeps the audio file's own suffix, `services/storage.py` buckets every audio extension, and `/audio` sends the per-format MIME type. Not done: `Content-Type` sniffing for extension-less URLs (they still save as `.mp3`), Vorbis/FLAC tags.
+
+**Database backups (`database/backup.py`).** `backup_database()` uses `sqlite3.Connection.backup()` — consistent even mid-write, unlike a file copy — into `get_backup_dir()` (`config.BACKUP_DIR`, else `backups/` beside the DB) as `<stem>-YYYYmmdd-HHMMSS.db`, then `_rotate()`s to the newest `BACKUP_KEEP`. Errors are logged, never raised. `maybe_backup_database()` adds the `BACKUP_ENABLED` switch and a `BACKUP_INTERVAL_HOURS` throttle based on the newest backup's timestamp; it's called at the start of `services.feeds.process_feeds_file()` (the path behind add/process-feeds, which rewrites tables with `to_sql(if_exists='replace')`) and on every scheduler tick. That same function used to delete a database failing `is_valid_database()` outright; `preserve_corrupt_database()` now copies it aside first as `...-corrupt.db`, which rotation never prunes. `podvault backup` forces one; `--list` lists them.
+
 ## Deployment (Docker)
 
 `Dockerfile` builds a single `python:3.11-slim` image running `podvault serve --host 0.0.0.0`; `docker-compose.yml` maps one host directory (`./data`) onto `/app/data` in the container. There's no separate worker container — the same in-process `JobRunner` (Fase 0) that backs local usage runs inside the single container, which is enough for a single-user app with at most a couple of concurrent downloads.
@@ -792,16 +809,24 @@ Checked **only at episode boundaries**, never mid-file-transfer: `download_all_e
 | `PODVAULT_LOG_LEVEL` | `config.LOG_LEVEL` | `INFO` |
 | `PODVAULT_LOG_FILE` | `config.LOG_FILE` | unset (console only) |
 | `PODVAULT_SCHEDULER_POLL_INTERVAL_SECONDS` | `config.SCHEDULER_POLL_INTERVAL_SECONDS` | `300` |
+| `PODVAULT_USERNAME` / `PODVAULT_PASSWORD` | `config.WEB_USERNAME` / `config.WEB_PASSWORD` | unset (no login) |
+| `PODVAULT_BACKUP_ENABLED` | `config.BACKUP_ENABLED` | `true` |
+| `PODVAULT_BACKUP_DIR` | `config.BACKUP_DIR` | unset (`backups/` next to the DB → `/app/data/backups`) |
+| `PODVAULT_BACKUP_KEEP` | `config.BACKUP_KEEP` | `7` |
+| `PODVAULT_BACKUP_INTERVAL_HOURS` | `config.BACKUP_INTERVAL_HOURS` | `24` |
+
+The `HEALTHCHECK` polls the unauthenticated `/healthz`. A multi-arch image (linux/amd64 + linux/arm64) is published as `martitoci/podvault`, built with `docker buildx build --platform linux/amd64,linux/arm64 ... --push` — the Dockerfile itself is architecture-neutral.
 
 Unset, every one of these matches the original hardcoded default exactly — running the CLI outside Docker is unaffected.
 
 ## Security Considerations
 
 1. **Input Validation**: All user inputs validated and sanitized
-2. **File Path Safety**: Prevents directory traversal attacks
-3. **SQL Injection Prevention**: Parameterized queries only
-4. **Network Security**: HTTPS for all downloads
-5. **File Permissions**: Appropriate file system permissions
+2. **File Path Safety**: Prevents directory traversal attacks (naming templates drop `.`/`..` segments; redirects only to local paths)
+3. **SQL Injection Prevention**: Parameterized queries; table names go through `validate_and_quote_table_name()`
+4. **Web Access**: Optional HTTP Basic login for every route (Fase 23); off by default, so anyone who can reach the port has full control unless it's set. Basic auth isn't encrypted — use an HTTPS reverse proxy beyond a trusted network
+5. **Secrets**: The password is never logged or rendered (the Settings page shows only whether it's set)
+6. **File Permissions**: Appropriate file system permissions
 
 ## User Interfaces
 

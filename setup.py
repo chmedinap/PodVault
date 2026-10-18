@@ -6,7 +6,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='podvault',
-    version='1.0.0',
+    version='1.1.0',
     description='A podcast archiving tool: download, organize, and preserve podcast episodes from RSS feeds',
     packages=find_packages(),
     include_package_data=True,
