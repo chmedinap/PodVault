@@ -6,6 +6,8 @@ Multi-arch image: `linux/amd64` and `linux/arm64` (Intel/AMD servers, Raspberry 
 
 Full documentation and source: https://github.com/chmedinap/PodVault
 
+> ⚠️ **PodVault is meant for your local or home network, not the public internet.** It hasn't been through any security audit or penetration testing, so don't expose it directly to the internet (port forwarding, a public server, etc.). The optional login keeps other people on your network out; it doesn't make PodVault safe to publish. To reach it from outside, use a VPN such as WireGuard or Tailscale.
+
 ## Features
 
 - **Any podcast feed:** RSS URLs or Apple Podcasts links, plus OPML import/export to move subscriptions from or to any podcast app
@@ -83,7 +85,7 @@ All settings are optional environment variables.
 | `PODVAULT_LOG_FILE` | unset | Also log to this file |
 | `PODVAULT_DB_PATH`, `PODVAULT_DOWNLOADS_FOLDER`, `PODVAULT_FEEDS_FILE` | under `/app/data` | Override individual paths |
 
-With the login on, the browser shows a sign-in page (optionally remembered for 30 days, renewed while you use it) and the sidebar has a Sign out button. Repeated wrong passwords lock the address out for a while. Scripts can still use HTTP Basic auth. The password isn't encrypted over plain HTTP, so if PodVault is reachable from the internet, put it behind an HTTPS reverse proxy (Caddy, Traefik, nginx…).
+With the login on, the browser shows a sign-in page (optionally remembered for 30 days, renewed while you use it) and the sidebar has a Sign out button. Repeated wrong passwords lock the address out for a while. Scripts can still use HTTP Basic auth. The password isn't encrypted over plain HTTP. PodVault isn't meant to be exposed to the internet (see the warning at the top); if you put it on a network you don't fully trust anyway, at least run it behind an HTTPS reverse proxy (Caddy, Traefik, nginx…).
 
 ## Listening from a podcast app
 
