@@ -10,13 +10,14 @@ a one-off CLI invocation) since it just does one pass and returns.
 """
 
 import os
+import sqlite3
 import uuid
 from typing import List, Optional
 
 from podvault import config
 from podvault.database import jobs as jobs_db
 from podvault.database.connection import get_db_connection
-from podvault.database.queries import table_exists
+from podvault.database.queries import table_exists, validate_and_quote_table_name
 from podvault.database.scheduling import get_all_schedules, get_due_podcasts, get_schedule, mark_checked, set_schedule
 from podvault.jobs import get_job_runner
 from podvault.logging_config import setup_logging
@@ -83,6 +84,7 @@ def list_schedules() -> List[ScheduleInfo]:
 
     with get_db_connection(db_path) as conn:
         rows = get_all_schedules(conn)
+        display_names = {row['name']: _display_name(conn, row['name']) for row in rows}
 
     return [
         ScheduleInfo(
@@ -93,9 +95,20 @@ def list_schedules() -> List[ScheduleInfo]:
             total_episodes=row['total_episodes'],
             downloaded_episodes=row['downloaded_episodes'],
             podcast_image_url=row['podcast_image_url'],
+            display_name=display_names[row['name']],
         )
         for row in rows
     ]
+
+
+def _display_name(conn: sqlite3.Connection, podcast_name: str) -> str:
+    """The feed's original title (`author_raw`), as the Library shows it; the table name if it has none."""
+    try:
+        safe_table_name = validate_and_quote_table_name(podcast_name)
+        row = conn.execute(f"SELECT MAX(author_raw) FROM {safe_table_name}").fetchone()
+    except (sqlite3.Error, ValueError):
+        return podcast_name
+    return (row[0] if row else None) or podcast_name
 
 
 def run_due_checks() -> CheckRunResult:

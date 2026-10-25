@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Optional
 
 from podvault import config
+from podvault.dates import newest_first
 from podvault.database.connection import get_db_connection
 from podvault.database.queries import table_exists, validate_and_quote_table_name
 from podvault.database.schema import add_download_columns_to_table
@@ -59,14 +60,14 @@ def list_episodes(podcast_name: str) -> EpisodeListResult:
         cursor.execute(f"""
             SELECT id, title, custom_title, status, Saved_Path, episode_number, published, Size, in_feed
             FROM {safe_table_name}
-            ORDER BY published DESC
         """)
+        rows = newest_first(cursor.fetchall(), lambda row: row[6])
         episodes = [
             EpisodeInfo(
                 episode_id=row[0], title=row[1], custom_title=row[2], status=row[3], saved_path=row[4],
                 episode_number=row[5], published=row[6], size_bytes=row[7], in_feed=bool(row[8]),
             )
-            for row in cursor.fetchall()
+            for row in rows
         ]
 
     return EpisodeListResult(podcast_name=podcast_name, episodes=episodes)

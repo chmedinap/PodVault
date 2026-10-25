@@ -19,16 +19,15 @@ compute it on download anyway.
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from email.utils import format_datetime, parsedate_to_datetime
+from email.utils import format_datetime
 from pathlib import Path
 from typing import Callable, Optional
-
-import pandas as pd
 
 from podvault import __version__, config
 from podvault.database.connection import get_db_connection
 from podvault.database.queries import table_exists, validate_and_quote_table_name
 from podvault.database.schema import add_download_columns_to_table
+from podvault.dates import newest_first, parse_published
 from podvault.download.id3_tags import find_cover_image_path
 from podvault.download.utils import AUDIO_MIME_TYPES, get_effective_title
 from podvault.services.podcasts import get_podcast_info
@@ -57,22 +56,6 @@ def podcast_cover_path(podcast_name: str) -> Optional[Path]:
         return None
     images = sorted(folder.glob('podcast_image.*'))
     return images[0] if images else None
-
-
-def _parse_published(published: Optional[str]) -> Optional[datetime]:
-    """Feeds store `published` as RFC 822 ("Mon, 01 Jan 2024 ...") or ISO strings; parse either."""
-    if not published:
-        return None
-    try:
-        parsed = parsedate_to_datetime(published)
-        return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
-    except (TypeError, ValueError, IndexError):
-        pass
-    try:
-        ts = pd.to_datetime(published, utc=True)
-        return None if pd.isna(ts) else ts.to_pydatetime()
-    except (ValueError, TypeError, OverflowError):
-        return None
 
 
 def _sub(parent, tag: str, text=None, ns: Optional[str] = None, **attrs):
@@ -125,13 +108,9 @@ def build_podcast_feed(podcast_name: str, urls: FeedUrls) -> Optional[str]:
         _sub(image, 'link', urls.page(podcast_name))
         _sub(channel, 'image', ns=ITUNES_NS, href=image_url)
 
-    # Newest first by real date — `ORDER BY published` would sort RFC 822 strings alphabetically
-    _oldest = datetime.min.replace(tzinfo=timezone.utc)
-    dated = sorted(((_parse_published(row[4]), row) for row in rows),
-                   key=lambda pair: pair[0] or _oldest, reverse=True)
-
-    for published_at, (episode_id, title, custom_title, summary, _published, episode_number, season_number,
-                       saved_path, size, link) in dated:
+    for (episode_id, title, custom_title, summary, published, episode_number, season_number,
+         saved_path, size, link) in newest_first(rows, lambda row: row[4]):
+        published_at = parse_published(published)
         audio_path = Path(saved_path)
         if not audio_path.exists():
             continue

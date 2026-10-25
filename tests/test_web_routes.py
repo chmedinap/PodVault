@@ -716,3 +716,38 @@ def test_podcast_detail_shows_play_button_only_for_downloaded(isolated_env, feed
     assert resp.status_code == 200
     # Count actual <button> elements, not the JS below that also mentions the class name.
     assert resp.text.count('class="secondary play-button"') == 1
+
+
+def test_episode_detail_shows_feed_html_description_as_text(isolated_env, feed_df_factory):
+    df = feed_df_factory(episodes=[{
+        'id': 'ep-1', 'title': 'Episode One', 'published': '2024-01-01',
+        'summary': 'First line.<br /><br />Read <a href="https://example.com">our book</a> &amp; more<script>x()</script>',
+    }])
+    with patch('podvault.services.feeds.collect_data', return_value=df):
+        services.add_feed('https://example.com/test_podcast.xml')
+
+    resp = TestClient(app).get('/podcasts/test_podcast/episodes/ep-1')
+    assert resp.status_code == 200
+    assert 'Read our book &amp; more' in resp.text
+    assert '&lt;br' not in resp.text and '&lt;a href' not in resp.text
+    assert '<script>x()' not in resp.text
+
+
+def test_podcast_detail_shows_full_dates(isolated_env, feed_df_factory):
+    df = feed_df_factory(episodes=[{'id': 'ep-1', 'title': 'Episode One', 'published': 'Fri, 03 Jan 2025 10:00:00 +0000'}])
+    with patch('podvault.services.feeds.collect_data', return_value=df):
+        services.add_feed('https://example.com/test_podcast.xml')
+
+    resp = TestClient(app).get('/podcasts/test_podcast')
+    assert '2025-01-03' in resp.text
+    assert 'Fri, 03 Ja<' not in resp.text
+
+
+def test_schedule_page_shows_podcast_display_name(isolated_env, feed_df_factory):
+    df = feed_df_factory(episodes=[{'id': 'ep-1', 'title': 'Episode One', 'published': '2024-01-01', 'author_raw': 'The Test Show'}])
+    with patch('podvault.services.feeds.collect_data', return_value=df):
+        services.add_feed('https://example.com/test_podcast.xml')
+
+    resp = TestClient(app).get('/schedule')
+    assert resp.status_code == 200
+    assert 'The Test Show' in resp.text

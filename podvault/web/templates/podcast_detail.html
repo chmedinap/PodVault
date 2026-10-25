@@ -86,7 +86,7 @@
 
 <div>
 {% for ep in episodes %}
-  <div class="ep-row" style="display:grid; grid-template-columns:38px 56px minmax(0,1fr) 96px 64px; gap:14px; align-items:center; padding:11px 6px; border-bottom:1px solid var(--border);">
+  <div class="ep-row" style="display:grid; grid-template-columns:38px 84px minmax(0,1fr) 96px 64px; gap:14px; align-items:center; padding:11px 6px; border-bottom:1px solid var(--border);">
     <div>
       {% if ep.status == 'downloaded' %}
       <button type="button" class="secondary play-button" style="width:32px; height:32px; padding:0; border-radius:99px; justify-content:center;"
@@ -94,7 +94,7 @@
               data-title="{{ ep.custom_title or ep.title }}" aria-label="Play {{ ep.custom_title or ep.title }}">▶</button>
       {% endif %}
     </div>
-    <div class="mono muted" style="font-size:12px;">{{ ep.episode_number if ep.episode_number else (ep.published[:10] if ep.published else '—') }}</div>
+    <div class="mono muted" style="font-size:12px;">{{ '#' ~ ep.episode_number if ep.episode_number else (ep.published | published_date if ep.published else '—') }}</div>
 
     <div class="ep-row-title" style="min-width:0;">
       <a href="/podcasts/{{ podcast_name }}/episodes/{{ ep.episode_id }}" style="min-width:0; color:inherit; display:block;">

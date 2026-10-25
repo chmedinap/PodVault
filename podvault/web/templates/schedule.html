@@ -31,12 +31,14 @@
     <input type="hidden" name="return_to" value="/schedule">
     <div style="display:grid; grid-template-columns:minmax(160px,1.4fr) minmax(220px,300px) 60px minmax(90px,110px) minmax(90px,110px); gap:12px; padding:12px 16px; border-bottom:1px solid var(--border); align-items:center;">
       <a href="/podcasts/{{ s.podcast_name }}" style="display:flex; align-items:center; gap:11px; min-width:0; color:inherit;">
-        <div class="cover-placeholder" style="width:34px; height:34px; flex-shrink:0; border-radius:8px; background:{{ cover_gradient(s.podcast_name) }};"></div>
+        <div class="cover-placeholder" style="position:relative; overflow:hidden; width:34px; height:34px; flex-shrink:0; border-radius:8px; background:{{ cover_gradient(s.podcast_name) }};">
+          {% if s.podcast_image_url %}<img src="{{ s.podcast_image_url }}" alt="" style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover;" onerror="this.style.display='none';">{% endif %}
+        </div>
         <div style="min-width:0;">
-          <div style="font-size:13px; font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
-            {{ s.total_episodes }} ep. · {{ s.downloaded_episodes if s.downloaded_episodes is not none else 0 }} dl.
+          <div style="font-size:13px; font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ s.display_name or s.podcast_name }}</div>
+          <div class="mono" style="font-size:11px; color:var(--faint); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+            {{ s.podcast_name }} · {{ s.total_episodes or 0 }} ep. · {{ s.downloaded_episodes if s.downloaded_episodes is not none else 0 }} dl.
           </div>
-          <div class="mono" style="font-size:11px; color:var(--faint); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ s.podcast_name }}</div>
         </div>
       </a>
       <div class="row" style="gap:3px; flex-wrap:nowrap;">

@@ -9,6 +9,7 @@ import pandas as pd
 from podvault.database.queries import table_exists, summary_exists, validate_and_quote_table_name
 from podvault.database.schema import create_summary_table_if_not_exists
 from podvault import config
+from podvault.dates import newest_first
 from podvault.config import EPISODE_STATUS_DOWNLOADED, EPISODE_STATUS_NOT_DOWNLOADED, EPISODE_STATUS_MISSING
 
 # Set up logging
@@ -62,11 +63,10 @@ def update_summary(conn: sqlite3.Connection, podcast_name: str, podcast_image_ur
             SELECT published, published_parsed
             FROM {safe_table_name}
             WHERE status = ?
-            ORDER BY published DESC
-            LIMIT 1
         """, (EPISODE_STATUS_DOWNLOADED,))
-        
-        last_downloaded_result = cursor.fetchone()
+
+        downloaded_rows = newest_first(cursor.fetchall(), lambda row: row[0] or row[1])
+        last_downloaded_result = downloaded_rows[0] if downloaded_rows else None
         last_downloaded_date = None
         
         if last_downloaded_result:

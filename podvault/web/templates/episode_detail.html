@@ -16,7 +16,7 @@
   </div>
   <div style="flex:1; min-width:280px; display:flex; flex-direction:column; gap:12px;">
     <div class="row" style="gap:9px;">
-      <span class="mono muted" style="font-size:11.5px;">{{ episode.episode_number if episode.episode_number else (episode.published[:10] if episode.published else '') }}</span>
+      <span class="mono muted" style="font-size:11.5px;">{{ '#' ~ episode.episode_number ~ ' · ' if episode.episode_number else '' }}{{ episode.published | published_date }}</span>
       {% if episode.status == 'downloaded' %}<span class="chip chip-ok"><span class="chip-dot"></span>downloaded</span>
       {% elif episode.status == 'missing' %}<span class="chip chip-warn"><span class="chip-dot"></span>missing</span>
       {% else %}<span class="chip chip-dim"><span class="chip-dot"></span>pending</span>{% endif %}
@@ -25,7 +25,7 @@
       {% if episode.checksum_status == 'corrupt' %}<span class="chip chip-err"><span class="chip-dot"></span>checksum mismatch</span>{% endif %}
     </div>
     <div style="font-size:24px; font-weight:700; letter-spacing:-0.02em; line-height:1.25;">{{ episode.display_title }}</div>
-    {% if episode.summary %}<div class="muted" style="font-size:13.5px; line-height:1.6; max-width:620px;">{{ episode.summary }}</div>{% endif %}
+    {% if episode.summary %}<div class="muted" style="font-size:13.5px; line-height:1.6; max-width:620px; white-space:pre-line; overflow-wrap:anywhere;">{{ episode.summary | plain_text }}</div>{% endif %}
     <div class="row" style="gap:8px;">
       {% if episode.status == 'downloaded' %}
       <button type="button" class="play-button"

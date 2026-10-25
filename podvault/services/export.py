@@ -20,6 +20,7 @@ from podvault import __version__
 from podvault.database.connection import get_db_connection
 from podvault.database.queries import validate_and_quote_table_name, table_exists
 from podvault.database.schema import add_download_columns_to_table
+from podvault.dates import newest_first
 from podvault.services.podcasts import get_podcast_info, list_podcast_table_names
 from podvault.validation import validate_podcast_name
 
@@ -31,8 +32,8 @@ def _episode_rows(conn, podcast_name: str) -> List[Dict[str, Any]]:
         SELECT id, title, custom_title, status, published, episode_number, season_number,
                Saved_Path, Size, Checksum, checksum_verified_at, checksum_status, in_feed
         FROM {safe_table_name}
-        ORDER BY published DESC
     """)
+    rows = newest_first(cursor.fetchall(), lambda row: row[4])
     return [
         {
             'id': row[0],
@@ -49,7 +50,7 @@ def _episode_rows(conn, podcast_name: str) -> List[Dict[str, Any]]:
             'checksum_status': row[11],
             'in_feed': bool(row[12]),
         }
-        for row in cursor.fetchall()
+        for row in rows
     ]
 
 

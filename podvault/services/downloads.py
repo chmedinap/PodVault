@@ -122,7 +122,7 @@ def download_episode(
 def preview_pending(podcast_name: str) -> List[EpisodeInfo]:
     """
     Preview, for the Queue page, which episodes `download_all` would pick up
-    right now — same rows, same `published DESC` order as
+    right now — same rows, same newest-first order as
     `download_all_episodes`'s own query (status not-downloaded or missing),
     just filtered client-side from `list_episodes()` instead of a second SQL
     query. Display-only: may go slightly stale if state changes between this

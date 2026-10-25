@@ -146,3 +146,10 @@ def test_run_due_checks_triggers_auto_download_job(isolated_env, feed_df_factory
     assert job['job_type'] == 'download_all'
     assert job['podcast_name'] == 'test_podcast'
     assert job['status'] == 'success'
+
+
+def test_list_schedules_includes_display_name(isolated_env, feed_df_factory):
+    _add_podcast(feed_df_factory, episodes=[
+        {'id': 'ep-1', 'title': 'Episode One', 'published': '2024-01-01', 'author_raw': 'The Test Show'},
+    ])
+    assert services.list_schedules()[0].display_name == 'The Test Show'

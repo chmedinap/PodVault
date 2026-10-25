@@ -305,6 +305,7 @@ class ScheduleInfo:
     total_episodes: Optional[int] = None
     downloaded_episodes: Optional[int] = None
     podcast_image_url: Optional[str] = None
+    display_name: Optional[str] = None  # the feed's own title (author_raw), falling back to podcast_name
 
 
 @dataclass

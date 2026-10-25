@@ -4,7 +4,9 @@
 
 Multi-arch image: `linux/amd64` and `linux/arm64` (Intel/AMD servers, Raspberry Pi, Apple Silicon, most NAS devices).
 
-Full documentation and source: https://github.com/chmedinap/PodVault
+Documentation and examples: https://podvault.dev
+
+Source code: https://github.com/chmedinap/PodVault (MIT License)
 
 > ⚠️ **PodVault is meant for your local or home network, not the public internet.** It hasn't been through any security audit or penetration testing, so don't expose it directly to the internet (port forwarding, a public server, etc.). The optional login keeps other people on your network out; it doesn't make PodVault safe to publish. To reach it from outside, use a VPN such as WireGuard or Tailscale.
 
@@ -122,7 +124,12 @@ The image has a built-in `HEALTHCHECK` on `/healthz`, which needs no login.
 ## Tags
 
 - `latest`: the most recent release
+- `1.3.1`: fixes: newest-first episode order (Download latest now really gets the latest), readable episode descriptions, full dates, podcast names on Schedule
 - `1.3.0`: sign-in page with Sign out and "keep me signed in", login lockout
 - `1.2.0`: OPML import/export, your own podcast feeds
 - `1.1.0`: web login, non-MP3 audio, database backups
 - `1.0.0`: first release
+
+## License
+
+MIT. Use, copy and modify it freely, as long as you keep the copyright notice and credit: © Carlos Medina, https://github.com/chmedinap/PodVault

@@ -497,6 +497,27 @@ Added at the user's request: three features aimed specifically at the app's role
 
 ---
 
+## Phase 26 — Fixes found while preparing podvault.dev, and the MIT license ✅ IMPLEMENTED
+
+**Goal:** screenshots for the new website (podvault.dev) exposed three display bugs, and one of them turned out to be a real download bug.
+
+**Episode order (the real bug).** Every `ORDER BY published DESC` sorted RFC 822 date strings alphabetically by weekday name. **Download latest** therefore fetched the pending episode with the alphabetically-last weekday instead of the newest one, and the bulk download, the Queue's "up next" list, the podcast page, the summary's last-downloaded date and the JSON export all used the same wrong order. New `podvault/dates.py` (`parse_published`, `newest_first`, `format_published`); every one of those sites now sorts on the parsed date in Python. The own-feed builder (Phase 24) already did this and now shares the helper.
+
+**Display.**
+- Podcast page: the date column showed `Wed, 31 Ju` (first 10 characters of an RFC 822 string). Now `2025-07-31`, or `#717` when the feed numbers episodes; same on the episode page.
+- Episode page: feed descriptions showed raw HTML (`<br />`, `<a href=…>`). Now converted to plain text with line breaks and bullets, and still escaped, so feed HTML is never rendered.
+- Schedule page: the row title showed "836 ep. · 2 dl." instead of the podcast's name. Now the name and cover, with the counts on the second line.
+
+**Not a bug:** the mobile Library screenshot looked clipped at 390 px. Headless Brave won't make a viewport narrower than 500 px and crops the image; at a real 390 px the layout fits.
+
+**License and links.** Added `LICENSE` (MIT: anyone may use, copy, modify and distribute it as long as the copyright notice and credit stay). `setup.py` declares it, plus `url='https://podvault.dev'`. README and DOCKERHUB link to podvault.dev for documentation and examples. Version 1.3.1.
+
+**Tests:** `test_dates.py`, plus route/service tests for the description, dates and Schedule names (10 new). The 7 that exercise app behaviour were checked to fail without the fixes.
+
+**Risk:** low. Ordering changes only make "newest" mean newest. Download latest, after an update, may pick a different (correct) episode than before.
+
+---
+
 ## Current status
 
-**Phases 0-25 complete.** Everything planned is implemented: the original web interface + Docker (0-6), configurable naming/scheduling/playback (7-9), the full visual redesign (10-18), the vault-specific features (19-21), job control + true single-episode download + archive-health surfacing (22), hardening (23: web login, non-MP3 audio, database backups), OPML + PodVault's own podcast feeds (24), and a proper login page with sign-out (25). It's tested (261 automated tests: 98 before the redesign, 132 after it, 153 with the vault features, 181 with Phase 22, 213 with Phase 23, 231 with Phase 24, now 261 with Phase 25) and documented here and in `ARCHITECTURE.md`/`README.md`. There's no pending next step from this roadmap; any new work needs a new phase.
+**Phases 0-26 complete.** Everything planned is implemented: the original web interface + Docker (0-6), configurable naming/scheduling/playback (7-9), the full visual redesign (10-18), the vault-specific features (19-21), job control + true single-episode download + archive-health surfacing (22), hardening (23: web login, non-MP3 audio, database backups), OPML + PodVault's own podcast feeds (24), a proper login page with sign-out (25), and date-ordering/display fixes plus the MIT license (26). It's tested (261 automated tests: 98 before the redesign, 132 after it, 153 with the vault features, 181 with Phase 22, 213 with Phase 23, 231 with Phase 24, 261 with Phase 25, now 271 with Phase 26) and documented here and in `ARCHITECTURE.md`/`README.md`. There's no pending next step from this roadmap; any new work needs a new phase.

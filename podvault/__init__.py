@@ -8,7 +8,7 @@ This package provides functionality to:
 - Generate summary statistics
 """
 
-__version__ = '1.3.0'
+__version__ = '1.3.1'
 
 # Import config
 from podvault import config

@@ -14,6 +14,7 @@ from typing import Callable, Optional, Tuple
 from tqdm import tqdm
 from podvault import config
 from podvault.config import EPISODE_STATUS_NOT_DOWNLOADED, EPISODE_STATUS_DOWNLOADED, EPISODE_STATUS_MISSING
+from podvault.dates import newest_first
 from podvault.database.queries import table_exists, validate_and_quote_table_name
 from podvault.database.schema import add_download_columns_to_table, update_download_info
 from podvault.database.settings import get_app_settings
@@ -330,10 +331,9 @@ def download_all_episodes(
         SELECT title, link_direct, published, id, episode_image_url, link, episode_number, custom_title, season_number
         FROM {safe_table_name}
         WHERE status IN (?, ?)
-        ORDER BY published DESC
     """, (EPISODE_STATUS_NOT_DOWNLOADED, EPISODE_STATUS_MISSING))
 
-    episodes = cursor.fetchall()
+    episodes = newest_first(cursor.fetchall(), lambda row: row[2])
 
     if not episodes:
         print(f"No episodes to download for '{podcast_name}'. All episodes may already be downloaded.")
@@ -794,11 +794,10 @@ def download_last_episode(
         SELECT title, link_direct, published, id, episode_number, custom_title, season_number
         FROM {safe_table_name}
         WHERE status IN (?, ?)
-        ORDER BY published DESC
-        LIMIT 1
     """, (EPISODE_STATUS_NOT_DOWNLOADED, EPISODE_STATUS_MISSING))
 
-    episode = cursor.fetchone()
+    candidates = newest_first(cursor.fetchall(), lambda row: row[2])
+    episode = candidates[0] if candidates else None
 
     if not episode:
         print(f"No episodes to download for '{podcast_name}'. All episodes may already be downloaded.")

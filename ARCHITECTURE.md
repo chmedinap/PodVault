@@ -22,9 +22,10 @@ This document provides a detailed technical overview of the PodVault application
 16. [Job Control, Single-Episode Download, and Archive Health (Fase 22)](#job-control-single-episode-download-and-archive-health-fase-22)
 17. [Hardening: Web Login, Audio Formats, Database Backups (Fase 23)](#hardening-web-login-audio-formats-database-backups-fase-23)
 18. [OPML and PodVault's Own Feeds (Fase 24)](#opml-and-podvaults-own-feeds-fase-24)
-19. [Deployment (Docker)](#deployment-docker)
-20. [Security Considerations](#security-considerations)
-21. [User Interfaces](#user-interfaces)
+19. [Date Ordering and Display Fixes (Fase 26)](#date-ordering-and-display-fixes-fase-26)
+20. [Deployment (Docker)](#deployment-docker)
+21. [Security Considerations](#security-considerations)
+22. [User Interfaces](#user-interfaces)
 
 ## System Overview
 
@@ -90,6 +91,7 @@ The CLI and the web routes are both thin: they validate/format and delegate to `
 podvault/
 ├── config.py → os (no internal dependencies)
 ├── hashing.py → hashlib (leaf module, no internal dependencies)
+├── dates.py → stdlib + pandas (leaf module: parse/sort feed publication dates)
 ├── validation.py → stdlib only
 ├── logging_config.py → config
 ├── cli.py → argparse, services, validation; lazily uvicorn + scheduler (for serve)
@@ -807,13 +809,18 @@ The session cookie (Fase 25) keeps Fase 23's "no session store, no new dependenc
 
 **Feeds-file fix.** `config.FEEDS_FILE` (`PODVAULT_FEEDS_FILE`) was defined but never read. `add_feed`, `process_feeds_file`, and the CLI all defaulted to `'feeds.txt'` in the working directory, so in Docker the web UI's "add feed" wrote `/app/feeds.txt`, outside the `/app/data` volume, and the list vanished on the next image rebuild. `services/feeds.py` now defaults to `config.FEEDS_FILE` and gained `read_feeds_file()`, `append_to_feeds_file()`, and `process_feed_urls()`. The last one is the body of `process_feeds_file()` (corrupt-DB handling, backup, per-URL sync) extracted so the OPML import can sync only the URLs it added.
 
-**Own feeds (`services/local_feed.py`).** `build_podcast_feed(name, urls)` emits RSS 2.0 with the iTunes and Atom namespaces. Items are the podcast's `downloaded` episodes whose `Saved_Path` still exists, since an enclosure that 404s makes many apps flag the whole feed. They're sorted newest-first in Python on the parsed date: `ORDER BY published` sorts RFC 822 strings alphabetically, which is wrong, and the rest of the app has the same quirk. Each item has the original GUID (`isPermaLink="false"`, so apps that already know the episode match it), RFC 822 `pubDate`, `enclosure` with length and per-format type, `itunes:episode`/`season`, and episode art when there's episode-specific art. The channel image prefers the local `podcast_image.*`, falling back to the remote URL. The feed sets `itunes:block` so directories don't list a private archive. There's no `itunes:duration`, because reading every file's header on each fetch doesn't scale. The service doesn't build URLs. The web layer passes a `FeedUrls` of callbacks, because only it knows the public base (`PODVAULT_BASE_URL`, else the request's) and the token.
+**Own feeds (`services/local_feed.py`).** `build_podcast_feed(name, urls)` emits RSS 2.0 with the iTunes and Atom namespaces. Items are the podcast's `downloaded` episodes whose `Saved_Path` still exists, since an enclosure that 404s makes many apps flag the whole feed. They're sorted newest-first in Python on the parsed date: `ORDER BY published` sorts RFC 822 strings alphabetically, which is wrong (Fase 26 fixed the same quirk everywhere else). Each item has the original GUID (`isPermaLink="false"`, so apps that already know the episode match it), RFC 822 `pubDate`, `enclosure` with length and per-format type, `itunes:episode`/`season`, and episode art when there's episode-specific art. The channel image prefers the local `podcast_image.*`, falling back to the remote URL. The feed sets `itunes:block` so directories don't list a private archive. There's no `itunes:duration`, because reading every file's header on each fetch doesn't scale. The service doesn't build URLs. The web layer passes a `FeedUrls` of callbacks, because only it knows the public base (`PODVAULT_BASE_URL`, else the request's) and the token.
 
 **Routes.** `GET /podcasts/{name}/feed.xml`, `/podcasts/{name}/feed/audio?id=`, `/podcasts/{name}/feed/cover[?id=]`, and `/feeds.opml`. The episode id is a query parameter, not a path segment. Feed GUIDs are very often URLs (`https://example.com/?p=123`), and Starlette routes on the *decoded* path, so an encoded `/` inside `{episode_id}` can't match. The older `/episodes/{episode_id}/...` routes still have that limitation.
 
 **Feed token (`web/auth.py`).** Podcast apps can't complete a browser Basic-auth prompt reliably, and many don't send credentials on enclosure requests at all. So when the login is on, `feed_token()` is `PODVAULT_FEED_TOKEN`, or else `HMAC-SHA256(password, "podvault-feed-v1")[:32]`. Deriving it from the password means rotating the password revokes every feed URL handed out, with no token table to manage. The middleware accepts `?token=` (constant-time compare) only for GET/HEAD on paths matching `_FEED_PATH`; tests check that the token opens nothing else, including the podcast's HTML page, `/export`, and POSTs. The token sits in feed URLs, so it can end up in proxy logs and app sync services, which is why it grants read access to the feeds only.
 
-## Deployment (Docker)
+## Date Ordering and Display Fixes (Fase 26)
+
+**Newest-first by real date (`podvault/dates.py`).** Feeds publish RFC 822 dates (`Wed, 01 Jan 2020 …`), and every `ORDER BY published DESC` sorted those strings alphabetically by weekday. Besides scrambling the episode list, that made `download_last_episode()` (`LIMIT 1`) fetch whichever pending episode had the alphabetically-last weekday, not the newest one, and made `download_all_episodes()`, the Queue's "up next" preview, the summary's last-downloaded date and the JSON export follow the same wrong order. `published_parsed` can't be used in SQL instead: it's usually NULL, because `collect_data()`'s `pd.Timestamp(*struct_time)` conversion fails. `dates.py` holds `parse_published()` (RFC 822, then pandas for ISO; moved from `services/local_feed.py`), `newest_first(items, key)` (undated last) and `format_published()` (`YYYY-MM-DD` for display). Every former `ORDER BY published` site now fetches the rows and sorts with `newest_first()`. These are per-podcast reads that already loaded every matching row, so the extra cost is one parse per row.
+
+**Display.** The podcast page's date column showed `published[:10]` of an RFC 822 string (`Wed, 31 Ju`); the template now uses the `published_date` filter and a wider column, and shows `#N` when the feed numbers episodes. Episode descriptions are feed HTML that the template autoescaped into visible tags; the `plain_text` filter (`web/templating.py:html_to_text()`) turns block tags into line breaks, list items into bullets, drops all other tags and decodes entities, and the result is still autoescaped and shown with `white-space:pre-line`. No HTML from a feed is ever rendered as HTML. The Schedule page showed the episode counts where the podcast's name belongs; `ScheduleInfo.display_name` (from `MAX(author_raw)`, the same source the Library uses) and the cover image now fill that row.
+
 
 `Dockerfile` builds a single `python:3.11-slim` image running `podvault serve --host 0.0.0.0`; `docker-compose.yml` maps one host directory (`./data`) onto `/app/data` in the container. There's no separate worker container — the same in-process `JobRunner` (Fase 0) that backs local usage runs inside the single container, which is enough for a single-user app with at most a couple of concurrent downloads.
 

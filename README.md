@@ -2,6 +2,8 @@
 
 A powerful Python application for downloading, organizing, and managing podcast episodes from RSS feeds. PodVault automatically extracts metadata, organizes files, and updates MP3 ID3 tags with complete episode information.
 
+📖 **Documentation and examples: [podvault.dev](https://podvault.dev)** · 🐳 Docker image: [`martitoci/podvault`](https://hub.docker.com/r/martitoci/podvault) · 📄 [MIT License](LICENSE)
+
 > [!WARNING]
 > **PodVault is meant for your local or home network, not the public internet.** It hasn't been through any security audit or penetration testing, so don't expose it directly to the internet (port forwarding, a public server, etc.). The optional login is there to keep other people on your network out, not to make PodVault safe to publish. If you need to reach it from outside, use a VPN such as WireGuard or Tailscale instead.
 
@@ -516,6 +518,8 @@ PodVault/
 ├── README.md                 # This file
 ├── ARCHITECTURE.md           # Technical documentation
 ├── ROADMAP.md                # Implementation phases and design decisions
+├── LICENSE                   # MIT License
+├── DOCKERHUB.md              # Docker Hub overview (short README)
 ├── feeds.txt                 # Your podcast feed list
 ├── podvault_data.db          # SQLite database (created automatically)
 ├── downloads/                # Downloaded episodes (created automatically)
@@ -530,6 +534,7 @@ PodVault/
     ├── jobs.py               # Background job runner + job control (cancel/pause/skip)
     ├── scheduler.py          # Auto-refresh background thread
     ├── hashing.py            # SHA-256 checksums for integrity checks
+    ├── dates.py              # Parsing/sorting feed publication dates
     ├── validation.py         # Input validation
     ├── logging_config.py     # Logging setup
     ├── data/                 # RSS feed parsing and statistics
@@ -571,8 +576,8 @@ Tests run against an isolated temp database/downloads folder and mock out networ
 
 ## Support
 
-For technical details and architecture information, see [ARCHITECTURE.md](ARCHITECTURE.md).
+Documentation, guides and examples live at **[podvault.dev](https://podvault.dev)**. For technical details and architecture information, see [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## License
 
-This project is provided as-is for personal use.
+PodVault is released under the [MIT License](LICENSE). Anyone can use, copy, modify and distribute it, including in their own projects, as long as they keep the copyright notice and credit: © Carlos Medina, [github.com/chmedinap/PodVault](https://github.com/chmedinap/PodVault).
