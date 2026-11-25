@@ -37,7 +37,6 @@ DB_TIMEOUT = _env_float('PODVAULT_DB_TIMEOUT', 30.0)
 
 # Database Backup Configuration (Fase 23 — see database/backup.py)
 BACKUP_ENABLED = _env_bool('PODVAULT_BACKUP_ENABLED', True)
-ENABLE_BACKUP = BACKUP_ENABLED  # historical name, kept for compatibility
 BACKUP_DIR = os.environ.get('PODVAULT_BACKUP_DIR')  # None = a "backups/" folder next to the database
 BACKUP_KEEP = _env_int('PODVAULT_BACKUP_KEEP', 7)  # how many automatic backups to keep
 BACKUP_INTERVAL_HOURS = _env_float('PODVAULT_BACKUP_INTERVAL_HOURS', 24)  # min time between automatic backups

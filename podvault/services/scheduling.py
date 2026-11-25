@@ -152,7 +152,10 @@ def run_due_checks() -> CheckRunResult:
             continue
 
         auto_download_triggered = False
-        if entry['auto_download']:
+        with get_db_connection(db_path) as conn:
+            # A long backlog can outlive the check interval; a second job would download the same files
+            already_downloading = jobs_db.find_active_job(conn, 'download_all', name) is not None
+        if entry['auto_download'] and not already_downloading:
             get_job_runner().submit(
                 "download_all", download_all, name,
                 podcast_name=name, require_confirmation=False,

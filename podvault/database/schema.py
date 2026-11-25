@@ -10,6 +10,23 @@ from typing import Optional
 from podvault import config
 from podvault.database.queries import table_exists, validate_and_quote_table_name
 from podvault.hashing import compute_checksum
+from podvault.logging_config import setup_logging
+
+logger = setup_logging(__name__)
+
+_PODCAST_EXTRA_COLUMNS = {
+    'author_raw': 'TEXT',
+    'episode_number': 'TEXT',
+    'season_number': 'TEXT',
+    'Saved_Path': 'TEXT',
+    'Size': 'INTEGER',
+    'File_name': 'TEXT',
+    'custom_title': 'TEXT',
+    'Checksum': 'TEXT',
+    'checksum_verified_at': 'TEXT',
+    'checksum_status': 'TEXT',
+    'in_feed': 'INTEGER DEFAULT 1',
+}
 
 
 def create_summary_table_if_not_exists(conn: sqlite3.Connection) -> None:
@@ -71,8 +88,6 @@ def add_podcast_image_url_to_summary(conn: sqlite3.Connection) -> None:
             print("  ✓ Added column 'podcast_image_url' to summary table")
         except sqlite3.Error as e:
             print(f"  ✗ Error adding column 'podcast_image_url': {e}")
-    else:
-        print("  ✓ Column 'podcast_image_url' already exists in summary table")
     
     # Add rss_feed_url column if it doesn't exist
     if 'rss_feed_url' not in existing_columns:
@@ -82,8 +97,6 @@ def add_podcast_image_url_to_summary(conn: sqlite3.Connection) -> None:
             print("  ✓ Added column 'rss_feed_url' to summary table")
         except sqlite3.Error as e:
             print(f"  ✗ Error adding column 'rss_feed_url': {e}")
-    else:
-        print("  ✓ Column 'rss_feed_url' already exists in summary table")
 
 
 def add_schedule_columns_to_summary(conn: sqlite3.Connection) -> None:
@@ -114,166 +127,37 @@ def add_schedule_columns_to_summary(conn: sqlite3.Connection) -> None:
                 print(f"  ✓ Added column '{column_name}' to summary table")
             except sqlite3.Error as e:
                 print(f"  ✗ Error adding column '{column_name}': {e}")
-        else:
-            print(f"  ✓ Column '{column_name}' already exists in summary table")
-
-
-def add_episode_metadata_columns_to_table(conn: sqlite3.Connection, table_name: str) -> None:
-    """
-    Add episode_number and season_number columns to an existing table if they don't exist.
-    
-    Parameters:
-    conn: SQLite connection object
-    table_name: Name of the table to update
-    """
-    if not table_exists(conn, table_name):
-        print(f"Table '{table_name}' does not exist. Cannot add columns.")
-        return
-    
-    cursor = conn.cursor()
-    
-    # Get existing columns
-    safe_table_name = validate_and_quote_table_name(table_name)
-    cursor.execute(f"PRAGMA table_info({safe_table_name})")
-    existing_columns = [row[1] for row in cursor.fetchall()]
-    
-    # Add episode_number column if it doesn't exist
-    if 'episode_number' not in existing_columns:
-        try:
-            cursor.execute(f"ALTER TABLE {safe_table_name} ADD COLUMN episode_number TEXT")
-            conn.commit()
-            print(f"  ✓ Added column 'episode_number' to table '{table_name}'")
-        except sqlite3.Error as e:
-            print(f"  ✗ Error adding column 'episode_number': {e}")
-    else:
-        print(f"  ✓ Column 'episode_number' already exists in table '{table_name}'")
-    
-    # Add season_number column if it doesn't exist
-    if 'season_number' not in existing_columns:
-        try:
-            cursor.execute(f"ALTER TABLE {safe_table_name} ADD COLUMN season_number TEXT")
-            conn.commit()
-            print(f"  ✓ Added column 'season_number' to table '{table_name}'")
-        except sqlite3.Error as e:
-            print(f"  ✗ Error adding column 'season_number': {e}")
-    else:
-        print(f"  ✓ Column 'season_number' already exists in table '{table_name}'")
-
-
-def add_author_raw_column_to_table(conn: sqlite3.Connection, table_name: str) -> None:
-    """
-    Add author_raw column to an existing table if it doesn't exist.
-    
-    Parameters:
-    conn: SQLite connection object
-    table_name: Name of the table to update
-    """
-    if not table_exists(conn, table_name):
-        print(f"Table '{table_name}' does not exist. Cannot add column.")
-        return
-    
-    cursor = conn.cursor()
-    
-    # Get existing columns
-    safe_table_name = validate_and_quote_table_name(table_name)
-    cursor.execute(f"PRAGMA table_info({safe_table_name})")
-    existing_columns = [row[1] for row in cursor.fetchall()]
-    
-    # Add column if it doesn't exist
-    if 'author_raw' not in existing_columns:
-        try:
-            cursor.execute(f"ALTER TABLE {safe_table_name} ADD COLUMN author_raw TEXT")
-            conn.commit()
-            print(f"  ✓ Added column 'author_raw' to table '{table_name}'")
-        except sqlite3.Error as e:
-            print(f"  ✗ Error adding column 'author_raw': {e}")
-    else:
-        print(f"  ✓ Column 'author_raw' already exists in table '{table_name}'")
 
 
 def add_download_columns_to_table(conn: sqlite3.Connection, table_name: str) -> None:
     """
-    Add Saved_Path, Size, File_name, custom_title, author_raw, episode_number,
-    season_number, and the integrity/feed-tracking columns (Checksum,
-    checksum_verified_at, checksum_status, in_feed) to an existing table if
-    they don't exist.
+    Add the columns a podcast table needs beyond what a feed sync writes
+    (author_raw, episode/season number, download info, and the integrity /
+    feed-tracking columns) if they don't exist yet. Runs on many request
+    paths, so it is silent unless it actually changes something.
 
     `in_feed` defaults to 1 (present) so existing rows — added before this
     column existed — aren't mistaken for episodes removed from the feed.
-
-    Parameters:
-    conn: SQLite connection object
-    table_name: Name of the table to update
     """
     if not table_exists(conn, table_name):
-        print(f"Table '{table_name}' does not exist. Cannot add columns.")
+        logger.warning(f"Table '{table_name}' does not exist. Cannot add columns.")
         return
-    
+
     cursor = conn.cursor()
-    
-    # Get existing columns
     safe_table_name = validate_and_quote_table_name(table_name)
     cursor.execute(f"PRAGMA table_info({safe_table_name})")
-    existing_columns = [row[1] for row in cursor.fetchall()]
-    
-    # Add author_raw column if it doesn't exist
-    if 'author_raw' not in existing_columns:
+    existing_columns = {row[1] for row in cursor.fetchall()}
+
+    for column_name, column_type in _PODCAST_EXTRA_COLUMNS.items():
+        if column_name in existing_columns:
+            continue
         try:
-            cursor.execute(f"ALTER TABLE {safe_table_name} ADD COLUMN author_raw TEXT")
+            # Column names come from a fixed dict; quoted because SQLite identifiers here are case-sensitive
+            cursor.execute(f'ALTER TABLE {safe_table_name} ADD COLUMN "{column_name}" {column_type}')
             conn.commit()
-            print(f"  ✓ Added column 'author_raw' to table '{table_name}'")
+            logger.info(f"Added column '{column_name}' to table '{table_name}'")
         except sqlite3.Error as e:
-            print(f"  ✗ Error adding column 'author_raw': {e}")
-    else:
-        print(f"  ✓ Column 'author_raw' already exists in table '{table_name}'")
-    
-    # Add episode_number column if it doesn't exist
-    if 'episode_number' not in existing_columns:
-        try:
-            cursor.execute(f"ALTER TABLE {safe_table_name} ADD COLUMN episode_number TEXT")
-            conn.commit()
-            print(f"  ✓ Added column 'episode_number' to table '{table_name}'")
-        except sqlite3.Error as e:
-            print(f"  ✗ Error adding column 'episode_number': {e}")
-    else:
-        print(f"  ✓ Column 'episode_number' already exists in table '{table_name}'")
-    
-    # Add season_number column if it doesn't exist
-    if 'season_number' not in existing_columns:
-        try:
-            cursor.execute(f"ALTER TABLE {safe_table_name} ADD COLUMN season_number TEXT")
-            conn.commit()
-            print(f"  ✓ Added column 'season_number' to table '{table_name}'")
-        except sqlite3.Error as e:
-            print(f"  ✗ Error adding column 'season_number': {e}")
-    else:
-        print(f"  ✓ Column 'season_number' already exists in table '{table_name}'")
-    
-    # Add download columns if they don't exist
-    columns_to_add = {
-        'Saved_Path': 'TEXT',
-        'Size': 'INTEGER',
-        'File_name': 'TEXT',
-        'custom_title': 'TEXT',
-        'Checksum': 'TEXT',
-        'checksum_verified_at': 'TEXT',
-        'checksum_status': 'TEXT',
-        'in_feed': 'INTEGER DEFAULT 1',
-    }
-    
-    for column_name, column_type in columns_to_add.items():
-        if column_name not in existing_columns:
-            try:
-                # Column names come from a fixed dict, so they're safe, but we quote them for consistency
-                # SQLite supports case-sensitive identifiers when quoted
-                safe_column_name = f'"{column_name}"'
-                cursor.execute(f"ALTER TABLE {safe_table_name} ADD COLUMN {safe_column_name} {column_type}")
-                conn.commit()
-                print(f"  ✓ Added column '{column_name}' to table '{table_name}'")
-            except sqlite3.Error as e:
-                print(f"  ✗ Error adding column '{column_name}': {e}")
-        else:
-            print(f"  ✓ Column '{column_name}' already exists in table '{table_name}'")
+            logger.error(f"Error adding column '{column_name}' to table '{table_name}': {e}")
 
 
 def update_download_info(
@@ -346,96 +230,6 @@ def update_download_info(
         return False
 
 
-def update_all_tables_with_episode_metadata_columns(conn: sqlite3.Connection) -> None:
-    """
-    Add episode_number and season_number columns to all existing podcast tables.
-    Run this once to update existing tables.
-    
-    Parameters:
-    conn: SQLite connection object
-    """
-    cursor = conn.cursor()
-    cursor.execute("""
-        SELECT name FROM sqlite_master 
-        WHERE type='table' AND name != 'summary'
-    """)
-    
-    tables = cursor.fetchall()
-    
-    if not tables:
-        print("No tables found to update.")
-        return
-    
-    print(f"Updating {len(tables)} table(s) with episode metadata columns...\n")
-    
-    for (table_name,) in tables:
-        print(f"Updating table: {table_name}")
-        add_episode_metadata_columns_to_table(conn, table_name)
-        print()
-    
-    print("All tables updated with episode metadata columns!")
-
-
-def update_all_tables_with_author_raw_column(conn: sqlite3.Connection) -> None:
-    """
-    Add author_raw column to all existing podcast tables.
-    Run this once to update existing tables.
-    
-    Parameters:
-    conn: SQLite connection object
-    """
-    cursor = conn.cursor()
-    cursor.execute("""
-        SELECT name FROM sqlite_master 
-        WHERE type='table' AND name != 'summary'
-    """)
-    
-    tables = cursor.fetchall()
-    
-    if not tables:
-        print("No tables found to update.")
-        return
-    
-    print(f"Updating {len(tables)} table(s) with author_raw column...\n")
-    
-    for (table_name,) in tables:
-        print(f"Updating table: {table_name}")
-        add_author_raw_column_to_table(conn, table_name)
-        print()
-    
-    print("All tables updated with author_raw column!")
-
-
-def update_all_tables_with_download_columns(conn: sqlite3.Connection) -> None:
-    """
-    Add download columns (Saved_Path, Size, File_name) to all existing podcast tables.
-    Run this once to update existing tables.
-    
-    Parameters:
-    conn: SQLite connection object
-    """
-    cursor = conn.cursor()
-    cursor.execute("""
-        SELECT name FROM sqlite_master 
-        WHERE type='table' AND name != 'summary'
-    """)
-    
-    tables = cursor.fetchall()
-    
-    if not tables:
-        print("No tables found to update.")
-        return
-    
-    print(f"Updating {len(tables)} table(s) with download columns...\n")
-    
-    for (table_name,) in tables:
-        print(f"Updating table: {table_name}")
-        add_download_columns_to_table(conn, table_name)
-        print()
-    
-    print("All tables updated!")
-
-
 def index_exists(conn: sqlite3.Connection, table_name: str, index_name: str) -> bool:
     """
     Check if an index exists for a table.
@@ -500,38 +294,6 @@ def add_indexes_to_table(conn: sqlite3.Connection, table_name: str) -> None:
                 print(f"  ✓ Created index '{index_name}' on column '{column}'")
             except sqlite3.Error as e:
                 print(f"  ✗ Error creating index '{index_name}': {e}")
-        else:
-            print(f"  ✓ Index '{index_name}' already exists")
-
-
-def update_all_tables_with_indexes(conn: sqlite3.Connection) -> None:
-    """
-    Add performance indexes to all existing podcast tables.
-    Run this once to optimize existing tables.
-    
-    Parameters:
-    conn: SQLite connection object
-    """
-    cursor = conn.cursor()
-    cursor.execute("""
-        SELECT name FROM sqlite_master 
-        WHERE type='table' AND name != 'summary'
-    """)
-    
-    tables = cursor.fetchall()
-    
-    if not tables:
-        print("No tables found to update.")
-        return
-    
-    print(f"Adding indexes to {len(tables)} table(s)...\n")
-    
-    for (table_name,) in tables:
-        print(f"Updating table: {table_name}")
-        add_indexes_to_table(conn, table_name)
-        print()
-    
-    print("All tables updated with indexes!")
 
 
 def create_jobs_table_if_not_exists(conn: sqlite3.Connection) -> None:
@@ -601,31 +363,5 @@ def create_app_settings_table_if_not_exists(conn: sqlite3.Connection) -> None:
     except sqlite3.Error as e:
         print(f"  ✗ Error creating app_settings table: {e}")
         raise
-
-
-def explain_query_plan(conn: sqlite3.Connection, query: str, params: tuple = None) -> None:
-    """
-    Analyze query performance using EXPLAIN QUERY PLAN.
-    
-    Parameters:
-    conn: SQLite connection object
-    query: SQL query to analyze
-    params: Query parameters (optional)
-    """
-    cursor = conn.cursor()
-    explain_query = f"EXPLAIN QUERY PLAN {query}"
-    
-    try:
-        if params:
-            cursor.execute(explain_query, params)
-        else:
-            cursor.execute(explain_query)
-        
-        results = cursor.fetchall()
-        print("Query Plan:")
-        for row in results:
-            print(f"  {row}")
-    except sqlite3.Error as e:
-        print(f"Error analyzing query: {e}")
 
 

@@ -127,6 +127,9 @@ class JobRunner:
             with get_db_connection(self.db_path) as conn:
                 if control.is_cancelled():
                     jobs_db.mark_job_failed(conn, job_id, "Cancelled by user")
+                elif getattr(result, 'success', True) is False:
+                    # Services report failure in their result rather than raising; don't show it as done
+                    jobs_db.mark_job_failed(conn, job_id, str(result))
                 else:
                     jobs_db.mark_job_success(conn, job_id, message=str(result) if result is not None else None)
         except Exception as e:

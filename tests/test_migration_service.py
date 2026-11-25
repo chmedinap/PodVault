@@ -70,3 +70,23 @@ def test_migrate_layout_is_idempotent(isolated_env, feed_df_factory, mock_downlo
     second_run = services.migrate_layout(apply=False)
 
     assert second_run.moves[0].status == 'skipped'
+
+
+def test_migrate_layout_moves_episodes_out_of_a_shared_folder(isolated_env, feed_df_factory, mock_download):
+    # Both episodes land in one "{podcast_name}/{year}" folder, then the template goes back to per-episode folders
+    services.update_settings('{podcast_name}/{year}', config.DEFAULT_FILENAME_TEMPLATE)
+    df = feed_df_factory(episodes=[
+        {'id': 'ep-1', 'title': 'Episode One', 'published': '2024-03-07'},
+        {'id': 'ep-2', 'title': 'Episode Two', 'published': '2024-04-07'},
+    ])
+    with patch('podvault.services.feeds.collect_data', return_value=df):
+        services.add_feed('https://example.com/test_podcast.xml')
+    with patch('podvault.download.downloader._download_with_retry', side_effect=mock_download):
+        services.download_all('test_podcast', require_confirmation=False)
+    services.update_settings(config.DEFAULT_FOLDER_TEMPLATE, config.DEFAULT_FILENAME_TEMPLATE)
+
+    result = services.migrate_layout(apply=True)
+
+    assert [m.status for m in result.moves] == ['moved', 'moved']
+    for episode in services.list_episodes('test_podcast').episodes:
+        assert Path(episode.saved_path).exists(), f"{episode.episode_id} lost track of its file"

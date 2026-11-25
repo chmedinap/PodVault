@@ -109,6 +109,29 @@ def list_jobs_by_status(conn: sqlite3.Connection, statuses: List[str], limit: in
     return [_row_to_dict(row) for row in cursor.fetchall()]
 
 
+def find_active_job(conn: sqlite3.Connection, job_type: str, podcast_name: str) -> Optional[str]:
+    """Id of a pending/running `job_type` job for `podcast_name`, or None."""
+    create_jobs_table_if_not_exists(conn)
+    row = conn.execute(
+        "SELECT id FROM jobs WHERE job_type = ? AND podcast_name = ? AND status IN ('pending', 'running') "
+        "ORDER BY created_at DESC LIMIT 1",
+        (job_type, podcast_name),
+    ).fetchone()
+    return row[0] if row else None
+
+
+def fail_interrupted_jobs(conn: sqlite3.Connection) -> int:
+    """Mark jobs left pending/running by a previous process as failed; they can never finish now."""
+    create_jobs_table_if_not_exists(conn)
+    cursor = conn.execute(
+        "UPDATE jobs SET status = ?, error = 'Interrupted by a restart', updated_at = ? "
+        "WHERE status IN (?, ?)",
+        (JOB_STATUS_FAILED, _now(), JOB_STATUS_PENDING, JOB_STATUS_RUNNING),
+    )
+    conn.commit()
+    return cursor.rowcount
+
+
 def get_latest_job_by_type(conn: sqlite3.Connection, job_type: str) -> Optional[Dict[str, Any]]:
     """Most recently created job of `job_type` (e.g. the Storage page's cached 'id3_check' result)."""
     create_jobs_table_if_not_exists(conn)

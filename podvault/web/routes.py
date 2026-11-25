@@ -24,11 +24,11 @@ from podvault import config, scheduler, services
 from podvault.database import jobs as jobs_db
 from podvault.database.backup import get_backup_dir
 from podvault.database.connection import get_db_connection
-from podvault.database.queries import mark_episodes_missing, table_exists
 from podvault.download.utils import AUDIO_MIME_TYPES, TEMPLATE_VARIABLES
 from podvault.jobs import get_job_runner
 from podvault.services import local_feed, opml
 from podvault.services.scheduling import INTERVAL_CHOICES_HOURS
+from podvault.web import auth
 from podvault.web.auth import feed_token
 from podvault.web.templating import format_duration, format_size, templates
 
@@ -168,7 +168,8 @@ def _feed_url_builders(request: Request) -> local_feed.FeedUrls:
 
 def _safe_redirect_target(path: Optional[str], default: str) -> str:
     """Only accept same-origin relative paths for `return_to`-style form fields, to rule out an open redirect."""
-    if path and path.startswith('/') and not path.startswith('//'):
+    # Same rule as auth.safe_next: browsers read "/\evil.com" as "//evil.com"
+    if path and auth.safe_next(path) == path:
         return path
     return default
 
@@ -504,31 +505,23 @@ def trigger_integrity_check():
 @router.post("/storage/redownload-corrupt")
 def redownload_corrupt():
     """
-    "Re-download all N" for the corrupt-files health row (Fase 22): groups
-    the corrupt episodes by podcast, marks each missing, then submits one
-    `download_all` job per affected podcast (matches how a bulk redownload
-    already works elsewhere — no per-episode job needed here).
+    "Re-download all N" for the corrupt-files health row (Fase 22): one
+    forced single-episode job per corrupt episode. `download_all` can't do
+    this — it keeps any file already on disk, corrupt or not.
     """
     corrupt_episodes = services.list_corrupt_episodes()
     if not corrupt_episodes:
         return _redirect_with_message("/storage", "No corrupt files to re-download.", ok=False)
 
-    by_podcast: dict = {}
-    for episode in corrupt_episodes:
-        by_podcast.setdefault(episode['podcast_name'], []).append(episode['episode_id'])
-
-    with get_db_connection() as conn:
-        for podcast_name, episode_ids in by_podcast.items():
-            mark_episodes_missing(conn, podcast_name, episode_ids)
-
     last_job_id = None
-    for podcast_name in by_podcast:
+    for episode in corrupt_episodes:
         last_job_id = get_job_runner().submit(
-            "download_all", services.download_all, podcast_name,
-            podcast_name=podcast_name, require_confirmation=False,
+            "download_episode", services.download_episode, episode['podcast_name'], episode['episode_id'],
+            podcast_name=episode['podcast_name'],
         )
+    podcast_count = len({episode['podcast_name'] for episode in corrupt_episodes})
     return _redirect_with_message(
-        "/storage", f"Re-downloading {len(corrupt_episodes)} corrupt episode(s) across {len(by_podcast)} podcast(s)…",
+        "/storage", f"Re-downloading {len(corrupt_episodes)} corrupt episode(s) across {podcast_count} podcast(s)…",
         ok=True, job_id=last_job_id, action_label="View queue", action_url="/queue",
     )
 
@@ -555,6 +548,13 @@ def export_library():
 
 @router.post("/podcasts/{name}/download")
 def trigger_download_all(name: str):
+    with get_db_connection() as conn:
+        active_job_id = jobs_db.find_active_job(conn, "download_all", name)
+    if active_job_id:
+        return _redirect_with_message(
+            f"/podcasts/{name}", "This podcast is already downloading.", ok=True,
+            job_id=active_job_id, action_label="View queue", action_url="/queue",
+        )
     job_id = get_job_runner().submit(
         "download_all", services.download_all, name,
         podcast_name=name, require_confirmation=False,

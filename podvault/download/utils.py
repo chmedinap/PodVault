@@ -198,6 +198,15 @@ def build_episode_base_filename(
     return sanitize_filename(rendered)
 
 
+def folder_segments(rendered: str) -> List[str]:
+    """
+    Split a rendered folder template on "/" and sanitize each part. Parts that
+    end up empty are dropped — including "." and "..", which sanitizing strips
+    to nothing — so a template can never point outside the downloads folder.
+    """
+    return [segment for segment in map(sanitize_filename, rendered.split('/')) if segment]
+
+
 def build_episode_folder_path(
     downloads_folder: Union[str, Path],
     podcast_name: str,
@@ -231,13 +240,7 @@ def build_episode_folder_path(
     variables = episode_template_variables(podcast_name, episode_date, episode_number, season_number, safe_episode_title)
     rendered = render_naming_template(folder_template, variables)
 
-    segments = [
-        sanitize_filename(segment)
-        for segment in rendered.split('/')
-        if segment.strip() not in ('', '.', '..')
-    ]
-    if not segments:
-        segments = ['untitled']
+    segments = folder_segments(rendered) or ['untitled']
 
     return Path(downloads_folder).joinpath(*segments)
 

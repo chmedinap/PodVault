@@ -11,6 +11,7 @@ handler or a background job, not just the argparse entry point.
 """
 
 import os
+import sqlite3
 from pathlib import Path
 from typing import Callable, List, Optional
 
@@ -24,6 +25,7 @@ from podvault.database.queries import table_exists, validate_and_quote_table_nam
 from podvault.database.schema import add_download_columns_to_table, add_indexes_to_table, add_podcast_image_url_to_summary
 from podvault.download.metadata import update_summary
 from podvault.logging_config import setup_logging
+from podvault.services.podcasts import NON_PODCAST_TABLES
 from podvault.services.results import FeedResult, ProcessFeedsResult
 from podvault.validation import (
     sanitize_podcast_name,
@@ -127,6 +129,37 @@ def _combine_with_removed_episodes(conn, table_name: str, df: pd.DataFrame) -> p
     return pd.concat([df, removed_df], ignore_index=True, sort=False)
 
 
+def _table_name_for_feed(conn, title: str, rss_feed_url: str) -> str:
+    """
+    The table a feed's episodes live in. A feed already in the library keeps
+    its table even if it changes its title (otherwise its history, schedule
+    and downloads would split off into a new, empty podcast). A new feed gets
+    its normalized title, unless that is an internal table or belongs to a
+    different feed, in which case a suffix keeps the two apart.
+    """
+    try:
+        row = conn.execute("SELECT name FROM summary WHERE rss_feed_url = ?", (rss_feed_url,)).fetchone()
+    except sqlite3.Error:  # no summary table (or no rss_feed_url column) yet: nothing to match
+        row = None
+    if row:
+        return row[0]
+
+    base = f"{title}_podcast" if title in NON_PODCAST_TABLES else title
+    name, suffix = base, 2
+    while _owned_by_other_feed(conn, name, rss_feed_url):
+        name, suffix = f"{base}_{suffix}", suffix + 1
+    return name
+
+
+def _owned_by_other_feed(conn, name: str, rss_feed_url: str) -> bool:
+    try:
+        row = conn.execute("SELECT rss_feed_url FROM summary WHERE name = ?", (name,)).fetchone()
+    except sqlite3.Error:
+        return False
+    # A row without a URL predates that column: assume it's this same feed, as before
+    return bool(row and row[0] and row[0] != rss_feed_url)
+
+
 def process_single_feed(conn, feed_url: str) -> FeedResult:
     is_valid, error = validate_feed_url(feed_url)
     if not is_valid:
@@ -148,6 +181,7 @@ def process_single_feed(conn, feed_url: str) -> FeedResult:
         podcast_image_url = df.attrs.get('podcast_image_url') if hasattr(df, 'attrs') else None
         if not rss_feed_url:
             rss_feed_url = normalized_url
+        title = _table_name_for_feed(conn, title, rss_feed_url)
 
         episodes_found = len(df)
         df = _preserve_download_state(conn, title, df)
@@ -255,4 +289,6 @@ def add_feed(
     feeds_file = feeds_file or config.FEEDS_FILE
     append_to_feeds_file([feed_url], feeds_file)
 
-    return process_feeds_file(feeds_file, progress_callback=progress_callback)
+    # Only the new feed: the result (and the job's success) must reflect this feed, not the
+    # rest of feeds.txt, and re-syncing the whole library on every add was wasted work.
+    return process_feed_urls([feed_url], progress_callback=progress_callback)

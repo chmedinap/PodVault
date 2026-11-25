@@ -96,12 +96,13 @@ def test_download_episode_redownloads_already_downloaded_episode(isolated_env, f
     _add_podcast(feed_df_factory, episodes=[
         {'id': 'ep-1', 'title': 'Episode One', 'published': '2024-01-01'},
     ])
-    with patch('podvault.download.downloader._download_with_retry', side_effect=mock_download):
+    with patch('podvault.download.downloader._download_with_retry', side_effect=mock_download) as fetch:
         first = services.download_episode('test_podcast', 'ep-1')
         second = services.download_episode('test_podcast', 'ep-1')
 
     assert first.success
     assert second.success
+    assert fetch.call_count == 2  # the second call really fetches again instead of keeping the file on disk
 
 
 def test_download_episode_rejects_malformed_podcast_name(isolated_env):
@@ -182,3 +183,11 @@ def test_download_all_skip_removes_one_episode_from_the_run(isolated_env, feed_d
     episodes = {e.episode_id: e for e in services.list_episodes('test_podcast').episodes}
     assert episodes['ep-2'].status == 'downloaded'
     assert episodes['ep-1'].status != 'downloaded'
+
+
+def test_download_with_nothing_pending_is_not_a_failure(isolated_env, feed_df_factory, mock_download):
+    _add_podcast(feed_df_factory, episodes=[{'id': 'ep-1', 'title': 'Episode One', 'published': '2024-01-01'}])
+    with patch('podvault.download.downloader._download_with_retry', side_effect=mock_download):
+        services.download_all('test_podcast', require_confirmation=False)
+        assert services.download_all('test_podcast', require_confirmation=False).success
+        assert services.download_last('test_podcast').success

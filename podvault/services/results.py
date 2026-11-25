@@ -33,6 +33,14 @@ class ProcessFeedsResult:
             return False
         return any(f.success for f in self.feeds)
 
+    def __str__(self) -> str:
+        """Human-readable job message/error (JobRunner stores `str(result)`)."""
+        if self.error:
+            return self.error
+        failed = [f"{f.feed_url}: {f.error}" for f in self.feeds if not f.success]
+        message = f"{len(self.feeds) - len(failed)} feed(s) synced"
+        return message + (f"; failed: {'; '.join(failed)}" if failed else '')
+
 
 @dataclass
 class OpmlImportResult:

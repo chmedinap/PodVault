@@ -124,6 +124,7 @@ The image has a built-in `HEALTHCHECK` on `/healthz`, which needs no login.
 ## Tags
 
 - `latest`: the most recent release
+- `1.3.2`: reliability fixes: interrupted downloads are retried and never saved as finished, Re-download really fetches again (also for corrupt files), a feed keeps its podcast when it changes its title, failed jobs show as failed, safer layout migration
 - `1.3.1`: fixes: newest-first episode order (Download latest now really gets the latest), readable episode descriptions, full dates, podcast names on Schedule
 - `1.3.0`: sign-in page with Sign out and "keep me signed in", login lockout
 - `1.2.0`: OPML import/export, your own podcast feeds

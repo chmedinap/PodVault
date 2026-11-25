@@ -7,6 +7,7 @@ duplicating it here.
 """
 
 import argparse
+import os
 import sys
 from pathlib import Path
 
@@ -376,6 +377,15 @@ def serve(host='127.0.0.1', port=8000, reload=False):
     elif not config.WEB_USERNAME and host not in ('127.0.0.1', 'localhost', '::1'):
         print(f"⚠️  The web interface is reachable from other machines on {host} and has no login.")
         print("   Set PODVAULT_USERNAME and PODVAULT_PASSWORD to require one.")
+
+    if os.path.exists(config.DB_PATH):
+        # Jobs run in this process's threads, so any still pending/running belong to a dead process
+        from podvault.database import jobs as jobs_db
+        from podvault.database.connection import get_db_connection
+        with get_db_connection(config.DB_PATH) as conn:
+            interrupted = jobs_db.fail_interrupted_jobs(conn)
+        if interrupted:
+            print(f"ℹ️  Marked {interrupted} job(s) interrupted by the last shutdown as failed.")
 
     if reload:
         print("⚠️  --reload starts uvicorn's reloader in a subprocess; the auto-refresh scheduler won't run there, skipping it.")

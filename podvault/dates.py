@@ -28,6 +28,12 @@ def parse_published(published: Optional[str]) -> Optional[datetime]:
     except (TypeError, ValueError, IndexError):
         pass
     try:
+        # ISO is the other common form; the stdlib parses it ~100x faster than pandas
+        parsed = datetime.fromisoformat(published[:-1] + '+00:00' if published.endswith('Z') else published)
+        return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+    except ValueError:
+        pass
+    try:
         ts = pd.to_datetime(published, utc=True)
         return None if pd.isna(ts) else ts.to_pydatetime()
     except (ValueError, TypeError, OverflowError):

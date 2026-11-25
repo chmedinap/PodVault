@@ -76,10 +76,14 @@ def _migrate_podcast(
             ))
             continue
 
-        if new_folder.exists():
+        # Only this episode's files (audio, cover, metadata xml share its base name):
+        # a folder can be shared by many episodes, e.g. with a "{podcast_name}/{year}" template.
+        episode_files = [f for f in old_folder.iterdir() if f.is_file() and f.stem == old_file.stem]
+        clashes = [f.name for f in episode_files if (new_folder / f.name).exists()]
+        if clashes:
             moves.append(MigrationMove(
                 podcast_name, episode_id, title, str(old_folder), str(new_folder),
-                status='error', detail='destination folder already exists',
+                status='error', detail=f"destination already has {', '.join(clashes)}",
             ))
             continue
 
@@ -91,8 +95,13 @@ def _migrate_podcast(
             continue
 
         try:
-            new_folder.parent.mkdir(parents=True, exist_ok=True)
-            shutil.move(str(old_folder), str(new_folder))
+            new_folder.mkdir(parents=True, exist_ok=True)
+            for f in episode_files:
+                shutil.move(str(f), str(new_folder / f.name))
+            try:
+                old_folder.rmdir()  # only succeeds once the folder is empty
+            except OSError:
+                pass
             new_saved_path = new_folder / old_file.name
             cursor.execute(
                 f"UPDATE {safe_table_name} SET Saved_Path = ? WHERE id = ?",

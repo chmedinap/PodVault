@@ -15,7 +15,7 @@ import pandas as pd
 from podvault import config
 from podvault.database.connection import get_db_connection
 from podvault.database.settings import get_app_settings, update_app_settings
-from podvault.download.utils import episode_template_variables, render_naming_template, sanitize_filename
+from podvault.download.utils import episode_template_variables, folder_segments, render_naming_template, sanitize_filename
 from podvault.services.results import AppSettings, NamingPreview, SettingsResult
 
 _SAMPLE_DATE = pd.Timestamp('2024-03-07')
@@ -24,9 +24,8 @@ _SAMPLE_PODCAST = 'sample_podcast'
 
 
 def _render_folder(folder_template: str, variables: dict) -> str:
-    """Render `folder_template` and re-join sanitized segments, mirroring build_episode_folder_path()."""
-    rendered = render_naming_template(folder_template, variables)
-    segments = [sanitize_filename(seg) for seg in rendered.split('/') if seg.strip() not in ('', '.', '..')]
+    """Render `folder_template` into the same segments build_episode_folder_path() uses."""
+    segments = folder_segments(render_naming_template(folder_template, variables))
     if not segments:
         raise ValueError("folder template must not render to an empty path")
     return '/'.join(segments)

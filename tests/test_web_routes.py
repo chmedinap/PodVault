@@ -79,13 +79,14 @@ def test_add_podcast_runs_as_background_job(isolated_env, feed_df_factory):
     client = TestClient(app, follow_redirects=False)
     with patch('podvault.services.feeds.collect_data', return_value=feed_df_factory()):
         resp = client.post('/podcasts', data={'feed_url': 'https://example.com/test_podcast.xml'})
+        assert resp.status_code == 303
+        assert 'job_id=' in resp.headers['location']
+        job_id = _job_id_from_redirect(resp.headers['location'])
+        # Poll inside the patch: the job runs in the background and must see the mocked feed
+        status = _poll_job(client, job_id)
 
-    assert resp.status_code == 303
-    assert 'job_id=' in resp.headers['location']
-    job_id = _job_id_from_redirect(resp.headers['location'])
-
-    status = _poll_job(client, job_id)
     assert status['status'] == 'success'
+    assert status['message'] == '1 feed(s) synced'
 
 
 def test_add_podcast_rejects_blank_url(isolated_env):
@@ -443,21 +444,24 @@ def test_storage_lists_local_only_episodes_for_review(isolated_env, feed_df_fact
     assert '/podcasts/test_podcast/episodes/ep-1' in resp.text
 
 
-def test_storage_redownload_corrupt_submits_download_all_per_podcast(isolated_env, feed_df_factory, mock_download):
+def test_storage_redownload_corrupt_fetches_the_file_again(isolated_env, feed_df_factory, mock_download):
     _add_and_download_one(feed_df_factory, mock_download)
     with get_db_connection() as conn:
         conn.execute("UPDATE test_podcast SET checksum_status = 'corrupt' WHERE id = 'ep-1'")
         conn.commit()
 
     client = TestClient(app, follow_redirects=False)
-    with patch('podvault.download.downloader._download_with_retry', side_effect=mock_download):
+    with patch('podvault.download.downloader._download_with_retry', side_effect=mock_download) as fetch:
         resp = client.post('/storage/redownload-corrupt')
         assert resp.status_code == 303
         job_id = _job_id_from_redirect(resp.headers['location'])
         status = _poll_job(client, job_id)
 
     assert status['status'] == 'success'
-    assert status['job_type'] == 'download_all'
+    assert status['job_type'] == 'download_episode'
+    assert fetch.call_count == 1  # the corrupt file on disk is replaced, not kept
+    with get_db_connection() as conn:
+        assert conn.execute("SELECT checksum_status FROM test_podcast WHERE id = 'ep-1'").fetchone()[0] == 'ok'
 
 
 def test_storage_redownload_corrupt_with_nothing_corrupt(isolated_env, feed_df_factory, mock_download):
@@ -751,3 +755,10 @@ def test_schedule_page_shows_podcast_display_name(isolated_env, feed_df_factory)
     resp = TestClient(app).get('/schedule')
     assert resp.status_code == 200
     assert 'The Test Show' in resp.text
+
+
+def test_return_to_cannot_redirect_to_another_site(isolated_env):
+    client = TestClient(app, follow_redirects=False)
+    resp = client.post('/verify', data={'return_to': '/\\evil.example.com'})
+    assert resp.status_code == 303
+    assert 'evil.example.com' not in resp.headers['location']

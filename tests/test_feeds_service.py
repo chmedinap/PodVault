@@ -182,3 +182,61 @@ def test_resyncing_feed_preserves_checksum_for_still_present_episode(isolated_en
         row = conn.execute("SELECT Checksum, checksum_status FROM test_podcast WHERE id='ep-1'").fetchone()
     assert row[0] == 'deadbeef' * 8
     assert row[1] == 'ok'
+
+
+def _sync(df, url):
+    with patch('podvault.services.feeds.collect_data', return_value=df), get_db_connection(config.DB_PATH) as conn:
+        return services.process_single_feed(conn, url)
+
+
+def test_feed_that_changes_its_title_keeps_its_table(isolated_env, feed_df_factory):
+    url = 'https://example.com/show.xml'
+    first = feed_df_factory(podcast_name='my_show')
+    first.attrs['rss_feed_url'] = url
+    assert _sync(first, url).podcast_name == 'my_show'
+    _mark_downloaded('my_show', 'ep-1', '/downloads/ep1.mp3')
+
+    renamed = feed_df_factory(podcast_name='my_show_rebrand')
+    renamed.attrs['rss_feed_url'] = url
+    result = _sync(renamed, url)
+
+    assert result.podcast_name == 'my_show'  # same feed URL -> same podcast, history intact
+    with get_db_connection(config.DB_PATH) as conn:
+        assert conn.execute("SELECT status FROM my_show WHERE id = 'ep-1'").fetchone()[0] == 'downloaded'
+        assert not conn.execute("SELECT 1 FROM sqlite_master WHERE name = 'my_show_rebrand'").fetchone()
+
+
+def test_different_feed_with_same_title_gets_its_own_table(isolated_env, feed_df_factory):
+    a = feed_df_factory(podcast_name='daily_news')
+    a.attrs['rss_feed_url'] = 'https://a.example.com/feed.xml'
+    b = feed_df_factory(podcast_name='daily_news')
+    b.attrs['rss_feed_url'] = 'https://b.example.com/feed.xml'
+
+    assert _sync(a, 'https://a.example.com/feed.xml').podcast_name == 'daily_news'
+    assert _sync(b, 'https://b.example.com/feed.xml').podcast_name == 'daily_news_2'
+
+
+def test_podcast_named_like_an_internal_table_does_not_overwrite_it(isolated_env, feed_df_factory):
+    with get_db_connection(config.DB_PATH) as conn:
+        from podvault.database import jobs as jobs_db
+        jobs_db.create_job(conn, 'job-1', 'add_feed')
+
+    df = feed_df_factory(podcast_name='jobs')
+    result = _sync(df, 'https://example.com/jobs.xml')
+
+    assert result.podcast_name == 'jobs_podcast'
+    with get_db_connection(config.DB_PATH) as conn:
+        assert conn.execute("SELECT job_type FROM jobs WHERE id = 'job-1'").fetchone()[0] == 'add_feed'
+
+
+def test_add_feed_result_reflects_only_the_new_feed(isolated_env, feed_df_factory):
+    with patch('podvault.services.feeds.collect_data', return_value=feed_df_factory()):
+        assert services.add_feed('https://example.com/test_podcast.xml').success
+
+    # A broken feed is not "successful" just because another feed in feeds.txt still syncs
+    with patch('podvault.services.feeds.collect_data', return_value=feed_df_factory().iloc[0:0]) as fetch:
+        result = services.add_feed('https://example.com/broken.xml')
+
+    assert not result.success
+    assert [f.feed_url for f in result.feeds] == ['https://example.com/broken.xml']
+    assert fetch.call_count == 1  # the rest of feeds.txt is not re-synced

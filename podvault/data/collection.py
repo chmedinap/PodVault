@@ -10,7 +10,7 @@ import requests
 import json
 import xml.etree.ElementTree as ET
 from urllib.parse import urlparse, parse_qs
-from typing import Tuple, Dict, Optional
+from typing import Tuple, Optional
 from datetime import datetime, timedelta
 from collections import OrderedDict
 import pandas as pd
@@ -140,82 +140,6 @@ def get_cached_rss_content(rss_url: str) -> Optional[bytes]:
         logger.error(f"Failed to download RSS feed {rss_url}: {e}")
         logger.debug(traceback.format_exc())
         return None
-
-
-def clear_rss_cache():
-    """
-    Clear the RSS feed cache.
-    
-    Useful for testing or forcing fresh downloads.
-    """
-    global _rss_cache, _rss_cache_current_size
-    cache_size = len(_rss_cache)
-    cache_bytes = _rss_cache_current_size
-    _rss_cache.clear()
-    _rss_cache_current_size = 0
-    logger.debug(f"RSS feed cache cleared ({cache_size} entries, {cache_bytes:,} bytes)")
-
-
-def invalidate_rss_cache_entry(rss_url: str) -> bool:
-    """
-    Invalidate a specific RSS feed cache entry.
-    
-    Parameters:
-    rss_url: URL of the RSS feed to invalidate
-    
-    Returns:
-    bool: True if entry was found and removed, False otherwise
-    
-    Example:
-        >>> invalidate_rss_cache_entry("https://feeds.example.com/podcast.rss")
-        True
-    """
-    global _rss_cache_current_size
-    
-    if rss_url in _rss_cache:
-        _, _, size = _rss_cache.pop(rss_url)
-        _rss_cache_current_size -= size
-        logger.debug(f"Invalidated cache entry: {rss_url}")
-        return True
-    return False
-
-
-def get_rss_cache_stats() -> Dict[str, any]:
-    """
-    Get statistics about the RSS feed cache.
-    
-    Returns:
-    dict: Cache statistics including:
-        - entries: Number of cached entries
-        - size_bytes: Total cache size in bytes
-        - size_mb: Total cache size in megabytes
-        - max_entries: Maximum number of entries allowed
-        - max_size_mb: Maximum cache size in megabytes
-        - ttl_hours: Time-to-live in hours
-        - utilization_entries: Percentage of entry limit used
-        - utilization_size: Percentage of size limit used
-    
-    Example:
-        >>> stats = get_rss_cache_stats()
-        >>> print(f"Cache has {stats['entries']} entries using {stats['size_mb']:.2f} MB")
-    """
-    current_time = datetime.now()
-    expired_count = sum(
-        1 for _, (_, timestamp, _) in _rss_cache.items()
-        if current_time - timestamp >= _rss_cache_ttl
-    )
-    
-    return {
-        'entries': len(_rss_cache),
-        'expired_entries': expired_count,
-        'size_bytes': _rss_cache_current_size,
-        'size_mb': _rss_cache_current_size / (1024 * 1024),
-        'max_entries': _rss_cache_max_entries,
-        'max_size_mb': config.RSS_CACHE_MAX_SIZE_MB,
-        'ttl_hours': config.RSS_CACHE_TTL_HOURS,
-        'utilization_entries': (len(_rss_cache) / _rss_cache_max_entries * 100) if _rss_cache_max_entries > 0 else 0,
-        'utilization_size': (_rss_cache_current_size / _rss_cache_max_size_bytes * 100) if _rss_cache_max_size_bytes > 0 else 0,
-    }
 
 
 def get_podcast_title(rss_url: str) -> str:
@@ -834,7 +758,8 @@ def collect_data(feed):
         # Handle published_parsed if available (convert to string)
         if 'published_parsed' in entry and entry['published_parsed']:
             try:
-                entry_dict['published_parsed'] = pd.Timestamp(*entry['published_parsed']).isoformat()
+                # feedparser gives a 9-field UTC struct_time; only the first 6 are date/time parts
+                entry_dict['published_parsed'] = datetime(*entry['published_parsed'][:6]).isoformat()
             except (ValueError, TypeError, IndexError) as e:
                 logger.debug(f"Failed to parse published_parsed for entry: {e}")
                 entry_dict['published_parsed'] = None

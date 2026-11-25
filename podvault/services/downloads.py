@@ -56,7 +56,8 @@ def download_all(
             progress_callback=progress_callback,
             job_control=job_control,
         )
-        return DownloadResult(success=successful > 0, downloaded=successful, total=total)
+        # total == 0: nothing was pending, which is a finished job, not a failed one
+        return DownloadResult(success=successful > 0 or total == 0, downloaded=successful, total=total)
 
 
 def download_last(
@@ -77,6 +78,9 @@ def download_last(
     with get_db_connection(db_path) as conn:
         if not table_exists(conn, podcast_name):
             return DownloadResult(success=False, error=f"Podcast '{podcast_name}' not found in database.")
+
+        if not preview_pending(podcast_name):
+            return DownloadResult(success=True, downloaded=0, total=0)  # nothing pending: done, not failed
 
         if progress_callback:
             progress_callback(0, 1, f"Downloading last episode for '{podcast_name}'")
@@ -112,7 +116,8 @@ def download_episode(
 
         if progress_callback:
             progress_callback(0, 1, f"Downloading episode {episode_id} of '{podcast_name}'")
-        success = download_one_episode(conn, podcast_name, episode_id)
+        # Always a fresh fetch: this is the "Re-download" action, so an existing (maybe corrupt) file is replaced
+        success = download_one_episode(conn, podcast_name, episode_id, force=True)
         if progress_callback:
             progress_callback(1, 1, "Done" if success else "Failed")
 

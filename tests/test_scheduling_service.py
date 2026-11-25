@@ -153,3 +153,19 @@ def test_list_schedules_includes_display_name(isolated_env, feed_df_factory):
         {'id': 'ep-1', 'title': 'Episode One', 'published': '2024-01-01', 'author_raw': 'The Test Show'},
     ])
     assert services.list_schedules()[0].display_name == 'The Test Show'
+
+
+def test_run_due_checks_does_not_queue_a_second_download_for_the_same_podcast(isolated_env, feed_df_factory):
+    from podvault.database import jobs as jobs_db
+    _add_podcast(feed_df_factory)
+    services.set_podcast_schedule('test_podcast', interval_hours=6, auto_download=True)
+    with get_db_connection(config.DB_PATH) as conn:
+        jobs_db.create_job(conn, 'still-running', 'download_all', podcast_name='test_podcast')
+        jobs_db.mark_job_running(conn, 'still-running')
+
+    with patch('podvault.services.feeds.collect_data', return_value=feed_df_factory()), \
+         patch('podvault.services.scheduling.get_job_runner') as runner:
+        result = services.run_due_checks()
+
+    assert not result.checked[0].auto_download_triggered
+    runner.return_value.submit.assert_not_called()

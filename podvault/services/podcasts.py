@@ -18,11 +18,11 @@ from podvault.services.results import PodcastInfo, PodcastListResult, StatusResu
 from podvault.validation import validate_podcast_name
 
 # Tables that exist alongside podcast tables but aren't themselves podcasts.
-_NON_PODCAST_TABLES = (config.SUMMARY_TABLE_NAME, 'jobs', config.APP_SETTINGS_TABLE_NAME)
+NON_PODCAST_TABLES = (config.SUMMARY_TABLE_NAME, 'jobs', config.APP_SETTINGS_TABLE_NAME)
 
 
 def list_podcast_table_names(conn: sqlite3.Connection) -> List[str]:
-    placeholders = ', '.join('?' for _ in _NON_PODCAST_TABLES)
+    placeholders = ', '.join('?' for _ in NON_PODCAST_TABLES)
     cursor = conn.cursor()
     cursor.execute(
         f"""
@@ -30,7 +30,7 @@ def list_podcast_table_names(conn: sqlite3.Connection) -> List[str]:
         WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT IN ({placeholders})
         ORDER BY name
         """,
-        _NON_PODCAST_TABLES,
+        NON_PODCAST_TABLES,
     )
     return [row[0] for row in cursor.fetchall()]
 

@@ -2,6 +2,7 @@
 Main download functions for podcast episodes.
 """
 
+import os
 import sqlite3
 import time
 import logging
@@ -20,8 +21,6 @@ from podvault.database.schema import add_download_columns_to_table, update_downl
 from podvault.database.settings import get_app_settings
 from podvault.database.transactions import (
     transaction,
-    savepoint,
-    safe_commit,
     safe_rollback,
     validate_transaction_state,
     TransactionError
@@ -179,9 +178,21 @@ def _download_with_retry(episode_url: str, file_path: Path) -> None:
     requests.RequestException: For network-related errors
     OSError: For file system errors
     """
+    # Stream into a .part file and move it into place only when complete, so an
+    # interrupted download never leaves a truncated file that looks finished.
+    part_path = file_path.with_name(file_path.name + '.part')
+    try:
+        _download_to(episode_url, part_path)
+        os.replace(part_path, file_path)
+    finally:
+        part_path.unlink(missing_ok=True)
+
+
+def _download_to(episode_url: str, file_path: Path) -> None:
+    """Retry loop of `_download_with_retry`, writing to `file_path` (the .part file)."""
     max_retries = config.MAX_RETRIES
     retry_delay = config.RETRY_DELAY_BASE
-    
+
     for attempt in range(max_retries):
         try:
             logger.debug(f"Download attempt {attempt + 1}/{max_retries} for {episode_url}")
@@ -239,12 +250,8 @@ def _download_with_retry(episode_url: str, file_path: Path) -> None:
             logger.error(f"HTTP error downloading {episode_url}: {e}")
             raise
             
-        except OSError as e:
-            # File system errors are usually not transient, don't retry
-            logger.error(f"File system error saving {file_path}: {e}")
-            logger.debug(traceback.format_exc())
-            raise
-            
+        # Must come before `except OSError`: RequestException subclasses OSError, so a connection
+        # dropped mid-stream (ChunkedEncodingError) would otherwise be treated as a disk error and not retried.
         except requests.RequestException as e:
             # Other request exceptions - retry if it might be transient
             if attempt < max_retries - 1:
@@ -259,6 +266,12 @@ def _download_with_retry(episode_url: str, file_path: Path) -> None:
                 logger.error(f"Request error downloading {episode_url} after {max_retries} attempts: {e}")
                 logger.debug(traceback.format_exc())
                 raise
+
+        except OSError as e:
+            # File system errors are usually not transient, don't retry
+            logger.error(f"File system error saving {file_path}: {e}")
+            logger.debug(traceback.format_exc())
+            raise
 
 
 def download_all_episodes(
@@ -634,17 +647,16 @@ def download_all_episodes(
             
             # Collect status and download info updates for batch processing (no commit yet - batch transaction)
             try:
-                # Collect status update
-                pending_status_updates.append((EPISODE_STATUS_DOWNLOADED, episode_id))
-                
                 # Collect download info update. This file was just downloaded, so
                 # hash it now (cheap relative to the network time already spent)
-                # and stamp it as the integrity baseline.
+                # and stamp it as the integrity baseline. Read the file before
+                # queuing anything, so a failure here queues neither update.
                 file_path_str = str(file_path)
                 file_size = file_path.stat().st_size
                 file_name = file_path.name
                 checksum = compute_checksum(file_path)
                 verified_at = datetime.now(timezone.utc).isoformat()
+                pending_status_updates.append((EPISODE_STATUS_DOWNLOADED, episode_id))
                 pending_download_info_updates.append(
                     (file_path_str, file_size, file_name, checksum, verified_at, 'ok', episode_id)
                 )
@@ -683,11 +695,8 @@ def download_all_episodes(
             logger.error(f"Network error downloading episode '{episode_title}': {e}")
             logger.debug(traceback.format_exc())
             failed_downloads += 1
-            # Use safe rollback for transaction cleanup
+            # Nothing of this episode was queued; keep the batch of earlier successes
             safe_rollback(conn)
-            pending_updates = []
-            pending_status_updates = []
-            pending_download_info_updates = []
             # Still add delay even on failure
             if idx < total_episodes:
                 pbar.write(f"  ⏳ Waiting {delay_seconds} seconds before next episode...")
@@ -698,11 +707,8 @@ def download_all_episodes(
             logger.error(f"File system error downloading episode '{episode_title}': {e}")
             logger.debug(traceback.format_exc())
             failed_downloads += 1
-            # Use safe rollback for transaction cleanup
+            # Nothing of this episode was queued; keep the batch of earlier successes
             safe_rollback(conn)
-            pending_updates = []
-            pending_status_updates = []
-            pending_download_info_updates = []
             # Still add delay even on failure
             if idx < total_episodes:
                 pbar.write(f"  ⏳ Waiting {delay_seconds} seconds before next episode...")
@@ -713,11 +719,8 @@ def download_all_episodes(
             logger.error(f"Database error processing episode '{episode_title}': {e}")
             logger.debug(traceback.format_exc())
             failed_downloads += 1
-            # Use safe rollback for transaction cleanup
+            # Nothing of this episode was queued; keep the batch of earlier successes
             safe_rollback(conn)
-            pending_updates = []
-            pending_status_updates = []
-            pending_download_info_updates = []
             # Still add delay even on failure
             if idx < total_episodes:
                 pbar.write(f"  ⏳ Waiting {delay_seconds} seconds before next episode...")
@@ -920,6 +923,7 @@ def download_one_episode(
     podcast_name: str,
     episode_id: str,
     downloads_folder: str = None,
+    force: bool = False,
 ) -> bool:
     """
     Download (or re-download) exactly one episode by id — true single-episode
@@ -933,6 +937,10 @@ def download_one_episode(
     its per-episode steps here — folder/filename, download-or-reuse, image,
     ID3 tags, XML metadata, checksum — is a smaller change than reshaping it
     to also serve a single-episode caller cleanly.
+
+    `force=True` fetches the file again even if it is already on disk (a
+    re-download of a corrupt or suspect file); the old file is replaced only
+    once the new one is complete.
 
     Returns True on success, False otherwise (episode not found, no
     download URL, network/filesystem/database error).
@@ -1019,7 +1027,7 @@ def download_one_episode(
 
     file_path = episode_audio_path(episode_folder, base_filename, episode_url)
 
-    if file_path.exists():
+    if file_path.exists() and not force:
         print(f"File already exists: {file_path}")
         try:
             if update_episode_id3_tags_from_db(conn, podcast_name, episode_id, file_path, episode_folder):

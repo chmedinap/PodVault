@@ -16,10 +16,7 @@ from podvault.database.queries import (
 from podvault.database.schema import (
     add_download_columns_to_table,
     update_download_info,
-    update_all_tables_with_download_columns,
     add_indexes_to_table,
-    update_all_tables_with_indexes,
-    explain_query_plan
 )
 
 __all__ = [
@@ -32,10 +29,7 @@ __all__ = [
     'verify_downloaded_files_exist',
     'add_download_columns_to_table',
     'update_download_info',
-    'update_all_tables_with_download_columns',
     'add_indexes_to_table',
-    'update_all_tables_with_indexes',
-    'explain_query_plan',
 ]
 
 

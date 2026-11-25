@@ -200,3 +200,32 @@ def test_job_runner_get_control_is_cleared_after_completion(isolated_env):
         assert runner.get_control(job_id) is None
     finally:
         runner.shutdown(wait=True)
+
+
+def test_fail_interrupted_jobs_clears_jobs_left_by_a_dead_process(isolated_env):
+    with get_db_connection() as conn:
+        jobs_db.create_job(conn, 'pending-job', 'download_all')
+        jobs_db.create_job(conn, 'running-job', 'download_all')
+        jobs_db.mark_job_running(conn, 'running-job')
+        jobs_db.create_job(conn, 'done-job', 'download_all')
+        jobs_db.mark_job_success(conn, 'done-job')
+
+        assert jobs_db.fail_interrupted_jobs(conn) == 2
+        assert jobs_db.list_jobs_by_status(conn, ['pending', 'running']) == []
+        assert jobs_db.get_job(conn, 'done-job')['status'] == 'success'
+
+
+def test_job_whose_result_reports_failure_is_marked_failed(isolated_env):
+    from podvault.services.results import DownloadResult
+
+    def target(progress_callback=None, job_control=None):
+        return DownloadResult(success=False, total=1, error='network down')
+
+    runner = JobRunner(max_workers=1)
+    try:
+        job = _wait_for_completion(runner, runner.submit('download_episode', target))
+    finally:
+        runner.shutdown()
+
+    assert job['status'] == 'failed'
+    assert job['error'] == 'network down'
