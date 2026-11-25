@@ -181,6 +181,8 @@ The download process will:
 - Update ID3 tags automatically
 - Download episode and podcast images
 
+Each file is first written as `<name>.part` and only renamed to its real name once it has fully arrived. If the connection drops mid-download, PodVault tries again (up to 3 attempts in total); if it still fails, the partial file is deleted and the episode stays pending, so an interrupted download is never mistaken for a finished one.
+
 #### Verify Downloaded Files
 
 ```bash
@@ -215,7 +217,9 @@ The custom name is stored separately from the feed's original title, so re-proce
 podvault add https://feeds.example.com/podcast.rss
 ```
 
-This adds the feed to `feeds.txt` (or wherever `PODVAULT_FEEDS_FILE` points) and processes it immediately.
+This adds the feed to `feeds.txt` (or wherever `PODVAULT_FEEDS_FILE` points) and processes just that feed immediately (your other feeds aren't re-synced).
+
+A podcast is identified by its feed URL, not its title: if a podcast later renames itself, it stays the same podcast in your library, with its history, schedule and downloads. Two different feeds that happen to share a title are kept apart (the second one gets a `_2` suffix).
 
 #### Import and Export OPML
 
@@ -272,7 +276,7 @@ podvault migrate-layout           # dry run: lists what would move, changes noth
 podvault migrate-layout --apply   # moves the files and updates the database
 ```
 
-You only need this after changing a template; with the default templates there's nothing to move. The Storage page in the web UI shows the same dry-run list ("file(s) sitting outside the current naming template"), but moving the files is CLI-only on purpose: it touches real files on disk, so run the dry run first and check it before using `--apply`. In Docker: `docker compose exec podvault podvault migrate-layout`.
+You only need this after changing a template; with the default templates there's nothing to move. The Storage page in the web UI shows the same dry-run list ("file(s) sitting outside the current naming template"), but moving the files is CLI-only on purpose: it touches real files on disk, so run the dry run first and check it before using `--apply`. Only each episode's own files (audio, cover, metadata XML) are moved, so this also works for templates where several episodes share one folder (e.g. `{podcast_name}/{year}`); a folder is removed once it's empty. In Docker: `docker compose exec podvault podvault migrate-layout`.
 
 #### Auto-Refresh Schedule
 
@@ -327,7 +331,7 @@ Opens a browser-based dashboard at http://127.0.0.1:8000 (use `--host`/`--port` 
 - **Storage** (`/storage`) — disk usage by file type, largest podcasts, an **Export library** link, and four health checks: files marked downloaded but missing on disk, files sitting outside the current naming template (dry-run only — moving them for real is still CLI-only), ID3 tag completeness, and file **integrity** (naming each corrupt file, with a "Re-download all N" action) — the last two run as background jobs so they don't rescan the whole library on every page load. A fifth row lists episodes kept after leaving their feed, expandable to review each one.
 - **Settings** (`/settings`) — the naming templates with a live preview, plus a read-only Environment panel showing the `PODVAULT_*` variables currently in effect.
 
-Any action that starts a background job (adding a feed, downloading, checking ID3 tags/integrity) shows a small floating **toast** and, while it runs, a **job strip** with progress and a Cancel button — no separate "job progress" page to wait on, and the strip keeps tracking the job even after navigating elsewhere.
+Any action that starts a background job (adding a feed, downloading, checking ID3 tags/integrity) shows a small floating **toast** and, while it runs, a **job strip** with progress and a Cancel button — no separate "job progress" page to wait on, and the strip keeps tracking the job even after navigating elsewhere. A job whose work failed (e.g. a download that couldn't complete) shows as failed, with the reason. Each podcast runs one "download all" at a time: clicking it again, or a scheduled auto-download, while one is already running just points you to the running job. Jobs run inside the server process, so if PodVault is restarted mid-job (e.g. `docker compose up -d` after an update), those jobs are marked failed ("Interrupted by a restart") on the next start; run them again.
 
 **Archival features.** These three matter specifically because this app's job is to *keep* podcasts, not just fetch them once:
 
@@ -459,7 +463,7 @@ If you need to re-download episodes (e.g., if files were deleted):
 1. Run `podvault verify [podcast_name]` — it detects episodes whose file is missing on disk and marks them `missing`
 2. Run `podvault download podcast_name` (or `download-last`) — missing episodes are downloaded again automatically
 
-From the web UI you can also re-download a single episode (the ↓ button on the podcast page, or "Re-download" on the episode page), or re-download every corrupt file at once from the Storage page's Integrity check.
+From the web UI you can also re-download a single episode (the ↓ button on the podcast page, or "Re-download" on the episode page), or re-download every corrupt file at once from the Storage page's Integrity check. These always fetch the file again, even if one is already on disk; the old file is only replaced once the new one has fully downloaded, so a failed re-download never leaves you with less than you had.
 
 ### Updating Episode Metadata
 
