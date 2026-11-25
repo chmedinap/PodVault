@@ -437,7 +437,7 @@ Defaults live in `podvault/config.py`. The deployment-relevant ones can be overr
 Other settings (retries, RSS cache size, filename length) are plain constants in `config.py`:
 
 ```python
-MAX_RETRIES = 3                  # Retry attempts for failed downloads
+MAX_RETRIES = 3                  # Attempts per download (first try included)
 RETRY_DELAY_BASE = 1             # Base delay for exponential backoff
 RETRY_DELAY_MAX = 60             # Maximum delay for exponential backoff
 RSS_CACHE_TTL_HOURS = 1          # How long fetched feeds are cached

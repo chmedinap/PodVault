@@ -240,3 +240,17 @@ def test_add_feed_result_reflects_only_the_new_feed(isolated_env, feed_df_factor
     assert not result.success
     assert [f.feed_url for f in result.feeds] == ['https://example.com/broken.xml']
     assert fetch.call_count == 1  # the rest of feeds.txt is not re-synced
+
+
+def test_feed_split_before_url_matching_keeps_syncing_into_the_original(isolated_env, feed_df_factory):
+    # Before 1.3.2 a renamed feed became a second podcast with the same feed URL in `summary`
+    url = 'https://example.com/show.xml'
+    for name in ('my_show', 'my_show_rebrand'):
+        df = feed_df_factory(podcast_name=name)
+        df.attrs['rss_feed_url'] = url
+        with patch('podvault.services.feeds._table_name_for_feed', return_value=name):
+            _sync(df, url)
+
+    renamed_again = feed_df_factory(podcast_name='my_show_new_name')
+    renamed_again.attrs['rss_feed_url'] = url
+    assert _sync(renamed_again, url).podcast_name == 'my_show'

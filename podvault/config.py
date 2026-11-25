@@ -66,7 +66,7 @@ BATCH_COMMIT_SIZE = 10  # Number of episodes to process before committing transa
 SCHEDULER_POLL_INTERVAL_SECONDS = _env_int('PODVAULT_SCHEDULER_POLL_INTERVAL_SECONDS', 300)
 
 # Retry Configuration
-MAX_RETRIES = 3  # Maximum number of retry attempts for transient failures
+MAX_RETRIES = 3  # Attempts per download, first try included (so 2 retries)
 RETRY_DELAY_BASE = 1  # Base delay in seconds for exponential backoff
 RETRY_DELAY_MAX = 60  # Maximum delay in seconds for exponential backoff
 

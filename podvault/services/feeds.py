@@ -138,7 +138,10 @@ def _table_name_for_feed(conn, title: str, rss_feed_url: str) -> str:
     different feed, in which case a suffix keeps the two apart.
     """
     try:
-        row = conn.execute("SELECT name FROM summary WHERE rss_feed_url = ?", (rss_feed_url,)).fetchone()
+        # Oldest row first: a feed split into two podcasts before 1.3.2 keeps syncing into the original one
+        row = conn.execute(
+            "SELECT name FROM summary WHERE rss_feed_url = ? ORDER BY rowid LIMIT 1", (rss_feed_url,)
+        ).fetchone()
     except sqlite3.Error:  # no summary table (or no rss_feed_url column) yet: nothing to match
         row = None
     if row:
